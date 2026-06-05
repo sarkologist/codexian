@@ -728,9 +728,43 @@ describe('TabManager - Conversation Management', () => {
       const createNew = jest.fn().mockResolvedValue(undefined);
       activeTab!.controllers.conversationController = { createNew } as any;
 
-      await manager.createNewConversation();
+      const result = await manager.createNewConversation();
 
       expect(createNew).toHaveBeenCalled();
+      expect(result).toBe(activeTab);
+    });
+
+    it('should create a blank tab when the active tab is streaming', async () => {
+      const activeTab = manager.getActiveTab();
+      const createNew = jest.fn().mockResolvedValue(undefined);
+      activeTab!.state.isStreaming = true;
+      activeTab!.controllers.conversationController = { createNew } as any;
+
+      const result = await manager.createNewConversation();
+
+      expect(createNew).not.toHaveBeenCalled();
+      expect(result).toBeDefined();
+      expect(result).not.toBe(activeTab);
+      expect(result!.conversationId).toBeNull();
+      expect(manager.getActiveTab()).toBe(result);
+      expect(activeTab!.state.isStreaming).toBe(true);
+    });
+
+    it('should not interrupt a streaming tab when max tabs is reached', async () => {
+      plugin.settings.maxTabs = 3;
+      await manager.createTab();
+      await manager.createTab();
+      const activeTab = manager.getActiveTab();
+      const createNew = jest.fn().mockResolvedValue(undefined);
+      activeTab!.state.isStreaming = true;
+      activeTab!.controllers.conversationController = { createNew } as any;
+
+      const result = await manager.createNewConversation();
+
+      expect(result).toBeNull();
+      expect(createNew).not.toHaveBeenCalled();
+      expect(manager.getActiveTab()).toBe(activeTab);
+      expect(activeTab!.state.isStreaming).toBe(true);
     });
   });
 });
