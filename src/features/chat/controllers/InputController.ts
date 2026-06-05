@@ -34,7 +34,7 @@ import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
-import { COMPLETION_FLAVOR_WORDS } from '../constants';
+import { COMPLETION_DURATION_LABEL } from '../constants';
 import { type InlineAskQuestionConfig, InlineAskUserQuestion } from '../rendering/InlineAskUserQuestion';
 import { InlineExitPlanMode } from '../rendering/InlineExitPlanMode';
 import { InlinePlanApproval,type PlanApprovalDecision } from '../rendering/InlinePlanApproval';
@@ -453,16 +453,13 @@ export class InputController {
             ? Math.floor((performance.now() - state.responseStartTime) / 1000)
             : 0;
           if (durationSeconds > 0) {
-            const flavorWord =
-              COMPLETION_FLAVOR_WORDS[Math.floor(Math.random() * COMPLETION_FLAVOR_WORDS.length)];
             finalAssistantMsg.durationSeconds = durationSeconds;
-            finalAssistantMsg.durationFlavorWord = flavorWord;
             // Add footer to live message in DOM
             if (state.currentContentEl) {
               const footerEl = state.currentContentEl.createDiv({ cls: 'claudian-response-footer' });
               footerEl.createSpan({
-                text: `* ${flavorWord} for ${formatDurationMmSs(durationSeconds)}`,
-                cls: 'claudian-baked-duration',
+                text: `${COMPLETION_DURATION_LABEL} in ${formatDurationMmSs(durationSeconds)}`,
+                cls: 'claudian-response-duration',
               });
             }
           }

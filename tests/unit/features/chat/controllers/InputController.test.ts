@@ -2036,7 +2036,7 @@ describe('InputController - Message Queue', () => {
       const assistantMsg = deps.state.messages.find((m: any) => m.role === 'assistant');
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg!.durationSeconds).toBe(5);
-      expect(assistantMsg!.durationFlavorWord).toBeDefined();
+      expect(assistantMsg!.durationFlavorWord).toBeUndefined();
 
       jest.spyOn(performance, 'now').mockRestore();
     });

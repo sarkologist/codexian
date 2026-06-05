@@ -141,6 +141,15 @@
   margin-bottom: 0;
 }
 
+.claudian-message-content .math,
+.claudian-message-content .math *,
+.claudian-message-content mjx-container,
+.claudian-message-content mjx-container * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
 .claudian-message-content ul,
 .claudian-message-content ol {
   margin: 8px 0;
@@ -192,7 +201,7 @@
   margin-top: 8px;
 }
 
-.claudian-baked-duration {
+.claudian-response-duration {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;

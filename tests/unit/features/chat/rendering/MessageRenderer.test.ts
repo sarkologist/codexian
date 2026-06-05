@@ -527,7 +527,7 @@ describe('MessageRenderer', () => {
     expect(messagesEl.children).toHaveLength(1);
   });
 
-  it('renders response duration footer when durationSeconds is present', () => {
+  it('renders neutral response duration footer and ignores legacy durationFlavorWord', () => {
     const messagesEl = createMockEl();
     const { renderer } = createRenderer(messagesEl);
     jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
@@ -541,7 +541,7 @@ describe('MessageRenderer', () => {
         { type: 'text', content: 'Response text' } as any,
       ],
       durationSeconds: 65,
-      durationFlavorWord: 'Baked',
+      durationFlavorWord: 'Legacy label',
     };
 
     renderer.renderStoredMessage(msg);
@@ -552,8 +552,7 @@ describe('MessageRenderer', () => {
     const footerEl = contentEl.children.find((c: any) => c.hasClass('claudian-response-footer'));
     expect(footerEl).toBeDefined();
     const durationSpan = footerEl!.children[0];
-    expect(durationSpan.textContent).toContain('Baked');
-    expect(durationSpan.textContent).toContain('1m 5s');
+    expect(durationSpan.textContent).toBe('Completed in 1m 5s');
   });
 
   it('does not render footer when durationSeconds is 0', () => {
@@ -580,7 +579,7 @@ describe('MessageRenderer', () => {
     expect(footerEl).toBeUndefined();
   });
 
-  it('uses default flavor word "Baked" when durationFlavorWord is not set', () => {
+  it('uses neutral completion label when durationFlavorWord is not set', () => {
     const messagesEl = createMockEl();
     const { renderer } = createRenderer(messagesEl);
     jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
@@ -602,7 +601,7 @@ describe('MessageRenderer', () => {
     const contentEl = msgEl.children[0];
     const footerEl = contentEl.children.find((c: any) => c.hasClass('claudian-response-footer'));
     expect(footerEl).toBeDefined();
-    expect(footerEl!.children[0].textContent).toContain('Baked');
+    expect(footerEl!.children[0].textContent).toBe('Completed in 30s');
   });
 
   it('renders fallback content for old conversations without contentBlocks', () => {

@@ -53,7 +53,7 @@ export interface ChatMessage {
   isRebuiltContext?: boolean;
   /** Duration in seconds from user send to response completion. */
   durationSeconds?: number;
-  /** Flavor word used for duration display (e.g., "Baked", "Cooked"). */
+  /** Legacy duration label from older persisted conversations. Ignored for display. */
   durationFlavorWord?: string;
   /** Provider-native user message identifier used for rewind. */
   userMessageId?: string;
