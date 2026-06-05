@@ -164,12 +164,14 @@ describe('SelectionController', () => {
     });
     expect(indicatorEl.textContent).toBe('1 line selected');
     expect(indicatorEl.style.display).toBe('block');
+    expect(indicatorEl.getAttribute('title')).toBeNull();
+    expect(indicatorEl.getAttribute('data-tooltip')).toBe('Selected text:\nselected text');
 
     controller.showHighlight();
     expect(showSelectionHighlight).toHaveBeenCalledWith(editorView, 0, 4);
   });
 
-  it('clears selection immediately when deselected without input handoff intent', () => {
+  it('keeps selection after deselecting and clears it only from the indicator', () => {
     controller.start();
     jest.advanceTimersByTime(250);
 
@@ -177,9 +179,43 @@ describe('SelectionController', () => {
     (global as any).document.activeElement = null;
     jest.advanceTimersByTime(250);
 
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.style.display).toBe('block');
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
+
+    indicatorEl.click();
+
     expect(controller.hasSelection()).toBe(false);
     expect(indicatorEl.style.display).toBe('none');
     expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(indicatorEl.getAttribute('data-tooltip')).toBeNull();
+  });
+
+  it('does not recapture the same live editor selection after indicator dismissal', () => {
+    controller.start();
+    jest.advanceTimersByTime(250);
+
+    indicatorEl.click();
+    expect(controller.hasSelection()).toBe(false);
+
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(false);
+
+    editor.getSelection.mockReturnValue('different selected text');
+    jest.advanceTimersByTime(250);
+
+    expect(controller.hasSelection()).toBe(true);
+    expect(controller.getContext()?.selectedText).toBe('different selected text');
+  });
+
+  it('normalizes and truncates selected text in the indicator title', () => {
+    const longText = `first\n   ${'x'.repeat(170)}`;
+    editor.getSelection.mockReturnValue(longText);
+
+    controller.start();
+    jest.advanceTimersByTime(250);
+
+    expect(indicatorEl.getAttribute('data-tooltip')).toBe(`Selected text:\nfirst ${'x'.repeat(154)}...`);
   });
 
   it('preserves selection when focus moves into the chat sidebar', () => {
@@ -212,7 +248,7 @@ describe('SelectionController', () => {
     expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
-  it('clears selection when focus leaves markdown and the chat sidebar is not focused', () => {
+  it('keeps selection when focus leaves markdown and the chat sidebar is not focused', () => {
     controller.start();
     jest.advanceTimersByTime(250);
     expect(controller.hasSelection()).toBe(true);
@@ -221,9 +257,9 @@ describe('SelectionController', () => {
     (global as any).document.activeElement = null;
     jest.advanceTimersByTime(250);
 
-    expect(controller.hasSelection()).toBe(false);
-    expect(indicatorEl.style.display).toBe('none');
-    expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.style.display).toBe('block');
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
   it('preserves selection when input focus arrives after a slow editor blur handoff', () => {
@@ -245,7 +281,7 @@ describe('SelectionController', () => {
     expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
-  it('clears selection after handoff grace expires when input never receives focus', () => {
+  it('keeps selection after handoff grace expires when input never receives focus', () => {
     controller.start();
     jest.advanceTimersByTime(250);
 
@@ -257,8 +293,8 @@ describe('SelectionController', () => {
     expect(controller.hasSelection()).toBe(true);
 
     jest.advanceTimersByTime(750);
-    expect(controller.hasSelection()).toBe(false);
-    expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(controller.hasSelection()).toBe(true);
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
   describe('Reading mode (preview)', () => {
@@ -298,6 +334,7 @@ describe('SelectionController', () => {
       });
       expect(indicatorEl.textContent).toBe('1 line selected');
       expect(indicatorEl.style.display).toBe('block');
+      expect(indicatorEl.getAttribute('data-tooltip')).toBe('Selected text:\nreading selection');
     });
 
     it('preserves raw reading mode text and omits line metadata', () => {
@@ -378,7 +415,7 @@ describe('SelectionController', () => {
       );
     });
 
-    it('clears selection when deselected in reading mode', () => {
+    it('keeps reading mode selection after deselecting and clears it only from the indicator', () => {
       const anchorNode = {};
       (global as any).document = {
         activeElement: null,
@@ -396,8 +433,41 @@ describe('SelectionController', () => {
       );
       jest.advanceTimersByTime(250);
 
+      expect(controller.hasSelection()).toBe(true);
+      expect(indicatorEl.style.display).toBe('block');
+
+      indicatorEl.click();
+
       expect(controller.hasSelection()).toBe(false);
       expect(indicatorEl.style.display).toBe('none');
+    });
+
+    it('does not recapture the same live reading mode selection after indicator dismissal', () => {
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('reading selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(true);
+
+      indicatorEl.click();
+      expect(controller.hasSelection()).toBe(false);
+
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(false);
+
+      (global as any).document.getSelection.mockReturnValue(
+        createMockDOMSelection('different reading selection', anchorNode),
+      );
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(true);
+      expect(controller.getContext()?.selectedText).toBe('different reading selection');
     });
 
     it('preserves reading mode selection when input is focused', () => {
@@ -445,7 +515,7 @@ describe('SelectionController', () => {
       expect(indicatorEl.style.display).toBe('block');
     });
 
-    it('clears CSS highlight when reading mode selection is deselected', () => {
+    it('clears CSS highlight when reading mode selection is dismissed from the indicator', () => {
       const anchorNode = {};
       (global as any).document = {
         activeElement: null,
@@ -459,10 +529,7 @@ describe('SelectionController', () => {
       controller.start();
       jest.advanceTimersByTime(250);
 
-      (global as any).document.getSelection.mockReturnValue(
-        createMockDOMSelection('', null),
-      );
-      jest.advanceTimersByTime(250);
+      indicatorEl.click();
 
       expect(mockHighlights.delete).toHaveBeenCalledWith('claudian-selection');
     });

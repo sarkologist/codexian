@@ -5,6 +5,7 @@ import { hideSelectionHighlight, showSelectionHighlight } from '../../../shared/
 import { type EditorSelectionContext, getEditorView } from '../../../utils/editor';
 import type { StoredSelection } from '../state/types';
 import { updateContextRowHasContent } from './contextRowVisibility';
+import { formatSelectionPreview } from './selectionPreview';
 
 const SELECTION_POLL_INTERVAL = 250;
 const INPUT_HANDOFF_GRACE_MS = 1500;
@@ -24,12 +25,16 @@ export class SelectionController {
   private contextRowEl: HTMLElement;
   private onVisibilityChange: (() => void) | null;
   private storedSelection: StoredSelection | null = null;
+  private dismissedSelectionSignature: string | null = null;
   private inputHandoffGraceUntil: number | null = null;
   private pollInterval: number | null = null;
+  private nextObjectId = 1;
+  private readonly objectIds = new WeakMap<object, number>();
   private readonly focusScopePointerDownHandler = () => {
     if (!this.storedSelection) return;
     this.inputHandoffGraceUntil = Date.now() + INPUT_HANDOFF_GRACE_MS;
   };
+  private readonly indicatorClickHandler = () => this.dismissFromIndicator();
 
   constructor(
     app: App,
@@ -53,6 +58,7 @@ export class SelectionController {
     if (this.focusScopeEl !== this.inputEl) {
       this.focusScopeEl.addEventListener('pointerdown', this.focusScopePointerDownHandler);
     }
+    this.indicatorEl.addEventListener('click', this.indicatorClickHandler);
     this.pollInterval = window.setInterval(() => this.poll(), SELECTION_POLL_INTERVAL);
   }
 
@@ -65,6 +71,7 @@ export class SelectionController {
     if (this.focusScopeEl !== this.inputEl) {
       this.focusScopeEl.removeEventListener('pointerdown', this.focusScopePointerDownHandler);
     }
+    this.indicatorEl.removeEventListener('click', this.indicatorClickHandler);
     this.clear();
   }
 
@@ -110,6 +117,8 @@ export class SelectionController {
 
       const notePath = view.file?.path || 'unknown';
       const lineCount = selectedText.split(/\r?\n/).length;
+      const signature = this.buildEditorSelectionSignature(notePath, selectedText, lineCount, startLine, from, to, editorView);
+      if (signature === this.dismissedSelectionSignature) return;
 
       const s = this.storedSelection;
       const sameRange = s
@@ -126,6 +135,7 @@ export class SelectionController {
         if (s && !sameRange) {
           this.clearHighlight();
         }
+        this.dismissedSelectionSignature = null;
         this.storedSelection = { notePath, selectedText, lineCount, startLine, from, to, editorView };
         this.updateIndicator();
       }
@@ -159,6 +169,8 @@ export class SelectionController {
       const notePath = view.file?.path || 'unknown';
       const lineCount = selectedText.split(/\r?\n/).length;
       const domRanges = this.cloneDOMRanges(selection);
+      const signature = this.buildPreviewSelectionSignature(notePath, selectedText, lineCount, domRanges);
+      if (signature === this.dismissedSelectionSignature) return;
 
       const unchanged = this.storedSelection
         && this.storedSelection.editorView === undefined
@@ -169,6 +181,7 @@ export class SelectionController {
 
       if (!unchanged) {
         this.clearHighlight();
+        this.dismissedSelectionSignature = null;
         this.storedSelection = { notePath, selectedText, lineCount, domRanges };
         this.updateIndicator();
       }
@@ -243,6 +256,74 @@ export class SelectionController {
     return ownerDocument?.activeElement ?? this.inputEl.ownerDocument?.activeElement ?? null;
   }
 
+  private getObjectId(object: object): number {
+    const existing = this.objectIds.get(object);
+    if (existing !== undefined) return existing;
+    const next = this.nextObjectId++;
+    this.objectIds.set(object, next);
+    return next;
+  }
+
+  private buildEditorSelectionSignature(
+    notePath: string,
+    selectedText: string,
+    lineCount: number,
+    startLine: number,
+    from: number,
+    to: number,
+    editorView: object
+  ): string {
+    return [
+      'editor',
+      this.getObjectId(editorView),
+      notePath,
+      from,
+      to,
+      startLine,
+      lineCount,
+      selectedText,
+    ].join('\u001f');
+  }
+
+  private buildPreviewSelectionSignature(
+    notePath: string,
+    selectedText: string,
+    lineCount: number,
+    ranges: Range[]
+  ): string {
+    const rangeParts = ranges.map(range => [
+      this.getObjectId(range.startContainer),
+      range.startOffset,
+      this.getObjectId(range.endContainer),
+      range.endOffset,
+    ].join(':'));
+
+    return [
+      'preview',
+      notePath,
+      lineCount,
+      selectedText,
+      rangeParts.join(','),
+    ].join('\u001f');
+  }
+
+  private getStoredSelectionSignature(): string | null {
+    const sel = this.storedSelection;
+    if (!sel) return null;
+    if (sel.editorView && sel.from !== undefined && sel.to !== undefined && sel.startLine !== undefined) {
+      return this.buildEditorSelectionSignature(
+        sel.notePath,
+        sel.selectedText,
+        sel.lineCount,
+        sel.startLine,
+        sel.from,
+        sel.to,
+        sel.editorView
+      );
+    }
+    return this.buildPreviewSelectionSignature(sel.notePath, sel.selectedText, sel.lineCount, sel.domRanges ?? []);
+  }
+
   private isFocusWithinChatSidebar(): boolean {
     const activeElement = this.getActiveElement(this.focusScopeEl.ownerDocument) as Node | null;
     return activeElement !== null
@@ -272,36 +353,11 @@ export class SelectionController {
   }
 
   private clearWhenMarkdownContextIsUnavailable(): void {
-    if (!this.storedSelection) return;
-    if (this.isFocusWithinChatSidebar()) {
-      this.inputHandoffGraceUntil = null;
-      return;
-    }
-    if (this.inputHandoffGraceUntil !== null && Date.now() <= this.inputHandoffGraceUntil) {
-      return;
-    }
-
     this.inputHandoffGraceUntil = null;
-    this.clearHighlight();
-    this.storedSelection = null;
-    this.updateIndicator();
   }
 
   private handleDeselection(): void {
-    if (!this.storedSelection) return;
-    if (this.isFocusWithinChatSidebar()) {
-      this.inputHandoffGraceUntil = null;
-      return;
-    }
-
-    if (this.inputHandoffGraceUntil !== null && Date.now() <= this.inputHandoffGraceUntil) {
-      return;
-    }
-
     this.inputHandoffGraceUntil = null;
-    this.clearHighlight();
-    this.storedSelection = null;
-    this.updateIndicator();
   }
 
   // ============================================
@@ -357,11 +413,18 @@ export class SelectionController {
     if (this.storedSelection) {
       const lineText = this.storedSelection.lineCount === 1 ? 'line' : 'lines';
       this.indicatorEl.textContent = `${this.storedSelection.lineCount} ${lineText} selected`;
+      this.indicatorEl.setAttribute('data-tooltip', this.buildIndicatorTitle());
       this.indicatorEl.removeClass('claudian-hidden');
     } else {
       this.indicatorEl.addClass('claudian-hidden');
+      this.indicatorEl.removeAttribute('data-tooltip');
     }
     this.updateContextRowVisibility();
+  }
+
+  private buildIndicatorTitle(): string {
+    if (!this.storedSelection) return '';
+    return `Selected text:\n${formatSelectionPreview(this.storedSelection.selectedText)}`;
   }
 
   updateContextRowVisibility(): void {
@@ -393,7 +456,14 @@ export class SelectionController {
   // Clear
   // ============================================
 
+  private dismissFromIndicator(): void {
+    const dismissedSelectionSignature = this.getStoredSelectionSignature();
+    this.clear();
+    this.dismissedSelectionSignature = dismissedSelectionSignature;
+  }
+
   clear(): void {
+    this.dismissedSelectionSignature = null;
     this.inputHandoffGraceUntil = null;
     this.clearHighlight();
     this.storedSelection = null;
