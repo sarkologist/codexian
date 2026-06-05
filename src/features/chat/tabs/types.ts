@@ -5,6 +5,7 @@ import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
 import type { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import type { CanvasSelectionController } from '../controllers/CanvasSelectionController';
+import type { ChatSelectionController } from '../controllers/ChatSelectionController';
 import type { ConversationController } from '../controllers/ConversationController';
 import type { InputController } from '../controllers/InputController';
 import type { NavigationController } from '../controllers/NavigationController';
@@ -91,6 +92,7 @@ export function generateTabId(): TabId {
 export interface TabControllers {
   selectionController: SelectionController | null;
   browserSelectionController: BrowserSelectionController | null;
+  chatSelectionController: ChatSelectionController | null;
   canvasSelectionController: CanvasSelectionController | null;
   conversationController: ConversationController | null;
   streamController: StreamController | null;
@@ -152,6 +154,7 @@ export interface TabDOMElements {
 
   selectionIndicatorEl: HTMLElement | null;
   browserIndicatorEl: HTMLElement | null;
+  chatSelectionIndicatorEl: HTMLElement | null;
   canvasIndicatorEl: HTMLElement | null;
 
   /** Cleanup functions for event listeners (prevents memory leaks). */

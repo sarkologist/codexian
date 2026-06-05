@@ -199,6 +199,7 @@ let mockServiceTierToggle: ReturnType<typeof createMockServiceTierToggle>;
 let mockMessageRenderer: { scrollToBottomIfNeeded: jest.Mock; setAsyncSubagentClickCallback: jest.Mock };
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
 let mockBrowserSelectionController: ReturnType<typeof createMockBrowserSelectionController>;
+let mockChatSelectionController: ReturnType<typeof createMockChatSelectionController>;
 let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionController>;
 let mockStreamController: { onAsyncSubagentStateChange: jest.Mock };
 let mockConversationController: { save: jest.Mock; rewind: jest.Mock };
@@ -214,6 +215,13 @@ const createMockSelectionController = () => ({
 });
 
 const createMockBrowserSelectionController = () => ({
+  start: jest.fn(),
+  stop: jest.fn(),
+  clear: jest.fn(),
+  updateContextRowVisibility: jest.fn(),
+});
+
+const createMockChatSelectionController = () => ({
   start: jest.fn(),
   stop: jest.fn(),
   clear: jest.fn(),
@@ -323,6 +331,13 @@ jest.mock('@/features/chat/controllers/BrowserSelectionController', () => ({
   BrowserSelectionController: jest.fn().mockImplementation(() => {
     mockBrowserSelectionController = createMockBrowserSelectionController();
     return mockBrowserSelectionController;
+  }),
+}));
+
+jest.mock('@/features/chat/controllers/ChatSelectionController', () => ({
+  ChatSelectionController: jest.fn().mockImplementation(() => {
+    mockChatSelectionController = createMockChatSelectionController();
+    return mockChatSelectionController;
   }),
 }));
 

@@ -36,6 +36,15 @@ export function encodeCodexTurn(request: ChatTurnRequest): PreparedChatTurn {
     );
   }
 
+  if (request.chatSelection?.selectedText) {
+    const source = request.chatSelection.messageId
+      ? `${request.chatSelection.role ?? 'chat'} message ${request.chatSelection.messageId}`
+      : (request.chatSelection.role ? `${request.chatSelection.role} message` : 'chat transcript');
+    sections.push(
+      `\n[Chat selection from ${source}:\n${request.chatSelection.selectedText}\n]`,
+    );
+  }
+
   if (request.canvasSelection) {
     const nodeList = request.canvasSelection.nodeIds.join(', ');
     if (nodeList) {

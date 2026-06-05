@@ -82,12 +82,29 @@ describe('encodeCodexTurn', () => {
     expect(result.prompt).toContain('node1, node2');
   });
 
+  it('should include chat selection context', () => {
+    const request: ChatTurnRequest = {
+      text: 'Review',
+      chatSelection: {
+        selectedText: 'assistant reply text',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant',
+      },
+    };
+    const result = encodeCodexTurn(request);
+
+    expect(result.prompt).toContain('[Chat selection from assistant message assistant-1:');
+    expect(result.prompt).toContain('assistant reply text');
+  });
+
   it('should combine all context sections', () => {
     const request: ChatTurnRequest = {
       text: 'Do something',
       currentNotePath: 'note.md',
       editorSelection: { notePath: 'note.md', mode: 'selection', selectedText: 'selected' },
       browserSelection: { source: 'chrome', selectedText: 'browser' },
+      chatSelection: { selectedText: 'chat', lineCount: 1 },
       canvasSelection: { canvasPath: 'c.canvas', nodeIds: ['n1'] },
     };
     const result = encodeCodexTurn(request);
@@ -96,6 +113,7 @@ describe('encodeCodexTurn', () => {
     expect(result.prompt).toContain('[Current note: note.md]');
     expect(result.prompt).toContain('[Editor selection');
     expect(result.prompt).toContain('[Browser selection');
+    expect(result.prompt).toContain('[Chat selection');
     expect(result.prompt).toContain('[Canvas selection');
   });
 

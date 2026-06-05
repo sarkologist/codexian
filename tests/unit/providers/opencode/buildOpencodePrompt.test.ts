@@ -9,6 +9,12 @@ describe('buildOpencodePromptText', () => {
         title: 'Example',
         url: 'https://example.com',
       },
+      chatSelection: {
+        selectedText: 'Assistant quote',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant',
+      },
       currentNotePath: 'notes/today.md',
       editorSelection: {
         mode: 'selection',
@@ -25,6 +31,8 @@ describe('buildOpencodePromptText', () => {
     expect(prompt).toContain('notes/today.md');
     expect(prompt).toContain('<editor_selection path="notes/today.md" lines="4-5">');
     expect(prompt).toContain('<browser_selection source="browser:https://example.com" title="Example" url="https://example.com">');
+    expect(prompt).toContain('<chat_selection lines="1" role="assistant" message_id="assistant-1">');
+    expect(prompt).toContain('Assistant quote');
   });
 
   it('does not auto-attach external context folders to the OpenCode prompt', () => {

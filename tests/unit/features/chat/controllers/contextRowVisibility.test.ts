@@ -2,7 +2,10 @@ import { createMockEl } from '@test/helpers/mockElement';
 
 import { updateContextRowHasContent } from '@/features/chat/controllers/contextRowVisibility';
 
-function createContextRow(browserIndicator: HTMLElement | null): HTMLElement {
+function createContextRow(
+  browserIndicator: HTMLElement | null,
+  chatIndicator: HTMLElement | null = null,
+): HTMLElement {
   const editorIndicator = createMockEl();
   editorIndicator.addClass('claudian-selection-indicator claudian-hidden');
   const canvasIndicator = createMockEl();
@@ -14,6 +17,7 @@ function createContextRow(browserIndicator: HTMLElement | null): HTMLElement {
   const lookup = new Map<string, unknown>([
     ['.claudian-selection-indicator', editorIndicator],
     ['.claudian-browser-selection-indicator', browserIndicator],
+    ['.claudian-chat-selection-indicator', chatIndicator],
     ['.claudian-canvas-indicator', canvasIndicator],
     ['.claudian-file-indicator', fileIndicator],
     ['.claudian-image-preview', imagePreview],
@@ -38,6 +42,16 @@ describe('updateContextRowHasContent', () => {
     const browserIndicator = createMockEl();
     browserIndicator.addClass('claudian-browser-selection-indicator');
     const contextRowEl = createContextRow(browserIndicator);
+
+    updateContextRowHasContent(contextRowEl);
+
+    expect((contextRowEl.classList.toggle as jest.Mock)).toHaveBeenCalledWith('has-content', true);
+  });
+
+  it('treats chat selection indicator as visible only when it is not hidden', () => {
+    const chatIndicator = createMockEl();
+    chatIndicator.addClass('claudian-chat-selection-indicator');
+    const contextRowEl = createContextRow(null, chatIndicator);
 
     updateContextRowHasContent(contextRowEl);
 

@@ -11,6 +11,7 @@ import type {
 } from '../../../core/types';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
+import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import type { ThinkingBlockState } from '../rendering/ThinkingBlockRenderer';
 import type { WriteEditState } from '../rendering/WriteEditRenderer';
@@ -21,6 +22,7 @@ export interface QueuedMessage {
   images?: ImageAttachment[];
   editorContext: EditorSelectionContext | null;
   browserContext?: BrowserSelectionContext | null;
+  chatSelection?: ChatSelectionContext | null;
   canvasContext: CanvasSelectionContext | null;
   /** Provider-neutral turn snapshot captured at enqueue time. */
   turnRequest?: ChatTurnRequest;

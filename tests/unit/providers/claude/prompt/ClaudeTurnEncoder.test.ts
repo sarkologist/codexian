@@ -49,6 +49,7 @@ describe('encodeClaudeTurn', () => {
       currentNotePath: 'notes/test.md',
       editorSelection: { notePath: 'test.md', mode: 'selection', selectedText: 'selected' } as any,
       browserSelection: { source: 'surfing-view', selectedText: 'browser text' } as any,
+      chatSelection: { selectedText: 'chat text', lineCount: 1 } as any,
     };
     const result = encodeClaudeTurn(request, mcpManager);
 
@@ -111,6 +112,25 @@ describe('encodeClaudeTurn', () => {
     expect(result.persistedContent).toContain('diagrams/overview.canvas');
     expect(result.persistedContent).toContain('node-1');
     expect(result.persistedContent).toContain('node-2');
+  });
+
+  it('should append chat selection context', () => {
+    const request: ChatTurnRequest = {
+      text: 'explain this reply',
+      chatSelection: {
+        selectedText: 'assistant reply text',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant',
+      },
+    };
+    const result = encodeClaudeTurn(request, mcpManager);
+
+    expect(result.persistedContent).toContain('<chat_selection');
+    expect(result.persistedContent).toContain('lines="1"');
+    expect(result.persistedContent).toContain('role="assistant"');
+    expect(result.persistedContent).toContain('message_id="assistant-1"');
+    expect(result.persistedContent).toContain('assistant reply text');
   });
 
   it('should extract and transform MCP mentions', () => {

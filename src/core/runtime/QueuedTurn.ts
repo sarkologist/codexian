@@ -10,6 +10,9 @@ export function cloneChatTurnRequest(request: ChatTurnRequest): ChatTurnRequest 
   return {
     ...request,
     images: cloneImages(request.images),
+    chatSelection: request.chatSelection
+      ? { ...request.chatSelection }
+      : request.chatSelection,
     externalContextPaths: request.externalContextPaths
       ? [...request.externalContextPaths]
       : undefined,
@@ -40,6 +43,11 @@ export function mergeQueuedChatTurns(
       text: mergeText(existingRequest.text, incomingRequest.text),
       images: mergeImages(existingRequest.images, incomingRequest.images),
       currentNotePath: incomingRequest.currentNotePath ?? existingRequest.currentNotePath,
+      chatSelection: incomingRequest.chatSelection
+        ? { ...incomingRequest.chatSelection }
+        : existingRequest.chatSelection
+          ? { ...existingRequest.chatSelection }
+          : incomingRequest.chatSelection ?? existingRequest.chatSelection,
       externalContextPaths: mergeStringLists(
         existingRequest.externalContextPaths,
         incomingRequest.externalContextPaths,

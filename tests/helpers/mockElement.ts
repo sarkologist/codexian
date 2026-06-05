@@ -70,6 +70,7 @@ export interface MockElement {
 const CLASS_DISPLAY: Record<string, string> = {
   'claudian-browser-selection-indicator': 'block',
   'claudian-canvas-indicator': 'block',
+  'claudian-chat-selection-indicator': 'block',
   'claudian-context-meter': 'flex',
   'claudian-file-indicator': 'none',
   'claudian-image-preview': 'none',

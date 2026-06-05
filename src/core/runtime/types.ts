@@ -1,5 +1,6 @@
 import type { BrowserSelectionContext } from '../../utils/browser';
 import type { CanvasSelectionContext } from '../../utils/canvas';
+import type { ChatSelectionContext } from '../../utils/chatSelection';
 import type { EditorSelectionContext } from '../../utils/editor';
 import type {
   ApprovalDecision,
@@ -48,6 +49,7 @@ export interface ChatTurnRequest {
   currentNotePath?: string;
   editorSelection?: EditorSelectionContext | null;
   browserSelection?: BrowserSelectionContext | null;
+  chatSelection?: ChatSelectionContext | null;
   canvasSelection?: CanvasSelectionContext | null;
   externalContextPaths?: string[];
   enabledMcpServers?: Set<string>;

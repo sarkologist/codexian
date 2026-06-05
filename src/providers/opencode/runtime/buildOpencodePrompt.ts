@@ -2,6 +2,7 @@ import type { ChatTurnRequest } from '../../../core/runtime/types';
 import type { ChatMessage } from '../../../core/types';
 import { appendBrowserContext } from '../../../utils/browser';
 import { appendCanvasContext } from '../../../utils/canvas';
+import { appendChatSelectionContext } from '../../../utils/chatSelection';
 import { appendCurrentNote } from '../../../utils/context';
 import { appendEditorContext } from '../../../utils/editor';
 import { buildContextFromHistory, buildPromptWithHistoryContext } from '../../../utils/session';
@@ -23,6 +24,10 @@ export function buildOpencodePromptText(
 
   if (request.browserSelection) {
     prompt = appendBrowserContext(prompt, request.browserSelection);
+  }
+
+  if (request.chatSelection) {
+    prompt = appendChatSelectionContext(prompt, request.chatSelection);
   }
 
   if (request.canvasSelection) {

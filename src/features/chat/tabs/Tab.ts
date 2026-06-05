@@ -28,6 +28,7 @@ import { getEnhancedPath } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import { CanvasSelectionController } from '../controllers/CanvasSelectionController';
+import { ChatSelectionController } from '../controllers/ChatSelectionController';
 import { ConversationController } from '../controllers/ConversationController';
 import { InputController } from '../controllers/InputController';
 import { NavigationController } from '../controllers/NavigationController';
@@ -423,6 +424,7 @@ export function createTab(options: TabCreateOptions): TabData {
     controllers: {
       selectionController: null,
       browserSelectionController: null,
+      chatSelectionController: null,
       canvasSelectionController: null,
       conversationController: null,
       streamController: null,
@@ -493,6 +495,7 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
     contextRowEl,
     selectionIndicatorEl: null,
     browserIndicatorEl: null,
+    chatSelectionIndicatorEl: null,
     canvasIndicatorEl: null,
     eventCleanups: [],
   };
@@ -621,6 +624,7 @@ function initializeContextManagers(tab: TabData, plugin: ClaudianPlugin): void {
       onChipsChanged: () => {
         tab.controllers.selectionController?.updateContextRowVisibility();
         tab.controllers.browserSelectionController?.updateContextRowVisibility();
+        tab.controllers.chatSelectionController?.updateContextRowVisibility();
         tab.controllers.canvasSelectionController?.updateContextRowVisibility();
         autoResizeTextarea(dom.inputEl);
         tab.renderer?.scrollToBottomIfNeeded();
@@ -639,6 +643,7 @@ function initializeContextManagers(tab: TabData, plugin: ClaudianPlugin): void {
       onImagesChanged: () => {
         tab.controllers.selectionController?.updateContextRowVisibility();
         tab.controllers.browserSelectionController?.updateContextRowVisibility();
+        tab.controllers.chatSelectionController?.updateContextRowVisibility();
         tab.controllers.canvasSelectionController?.updateContextRowVisibility();
         autoResizeTextarea(dom.inputEl);
         tab.renderer?.scrollToBottomIfNeeded();
@@ -934,6 +939,8 @@ export function initializeTabUI(
 
   dom.browserIndicatorEl = dom.contextRowEl.createDiv({ cls: 'claudian-browser-selection-indicator claudian-hidden' });
 
+  dom.chatSelectionIndicatorEl = dom.contextRowEl.createDiv({ cls: 'claudian-chat-selection-indicator claudian-hidden' });
+
   dom.canvasIndicatorEl = dom.contextRowEl.createDiv({ cls: 'claudian-canvas-indicator claudian-hidden' });
 
   const catalogInfo = options.getProviderCatalogConfig?.() ?? null;
@@ -1208,6 +1215,14 @@ export function initializeTabControllers(
     () => autoResizeTextarea(dom.inputEl)
   );
 
+  tab.controllers.chatSelectionController = new ChatSelectionController(
+    dom.messagesEl,
+    dom.chatSelectionIndicatorEl!,
+    dom.inputEl,
+    dom.contextRowEl,
+    () => autoResizeTextarea(dom.inputEl)
+  );
+
   tab.controllers.canvasSelectionController = new CanvasSelectionController(
     plugin.app,
     dom.canvasIndicatorEl!,
@@ -1320,6 +1335,7 @@ export function initializeTabControllers(
     streamController: tab.controllers.streamController,
     selectionController: tab.controllers.selectionController,
     browserSelectionController: tab.controllers.browserSelectionController,
+    chatSelectionController: tab.controllers.chatSelectionController,
     canvasSelectionController: tab.controllers.canvasSelectionController,
     conversationController: tab.controllers.conversationController,
     getInputEl: () => dom.inputEl,
@@ -1541,6 +1557,7 @@ export function activateTab(tab: TabData): void {
   tab.dom.contentEl.removeClass('claudian-hidden');
   tab.controllers.selectionController?.start();
   tab.controllers.browserSelectionController?.start();
+  tab.controllers.chatSelectionController?.start();
   tab.controllers.canvasSelectionController?.start();
   // Refresh navigation sidebar visibility (dimensions now available after display)
   tab.ui.navigationSidebar?.updateVisibility();
@@ -1553,6 +1570,7 @@ export function deactivateTab(tab: TabData): void {
   tab.dom.contentEl.addClass('claudian-hidden');
   tab.controllers.selectionController?.stop();
   tab.controllers.browserSelectionController?.stop();
+  tab.controllers.chatSelectionController?.stop();
   tab.controllers.canvasSelectionController?.stop();
 }
 
@@ -1567,6 +1585,8 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.controllers.selectionController?.clear();
   tab.controllers.browserSelectionController?.stop();
   tab.controllers.browserSelectionController?.clear();
+  tab.controllers.chatSelectionController?.stop();
+  tab.controllers.chatSelectionController?.clear();
   tab.controllers.canvasSelectionController?.stop();
   tab.controllers.canvasSelectionController?.clear();
   tab.controllers.navigationController?.dispose();

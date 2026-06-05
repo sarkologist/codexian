@@ -31,6 +31,7 @@ import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionD
 import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
+import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
@@ -50,6 +51,7 @@ import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { StatusPanel } from '../ui/StatusPanel';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
+import type { ChatSelectionController } from './ChatSelectionController';
 import type { ConversationController } from './ConversationController';
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
@@ -78,6 +80,7 @@ export interface InputControllerDeps {
   streamController: StreamController;
   selectionController: SelectionController;
   browserSelectionController?: BrowserSelectionController;
+  chatSelectionController?: ChatSelectionController;
   canvasSelectionController: CanvasSelectionController;
   conversationController: ConversationController;
   getInputEl: () => HTMLTextAreaElement;
@@ -191,6 +194,7 @@ export class InputController {
   async sendMessage(options?: {
     editorContextOverride?: EditorSelectionContext | null;
     browserContextOverride?: BrowserSelectionContext | null;
+    chatContextOverride?: ChatSelectionContext | null;
     canvasContextOverride?: CanvasSelectionContext | null;
     content?: string;
     images?: ChatMessage['images'];
@@ -203,6 +207,7 @@ export class InputController {
       streamController,
       selectionController,
       browserSelectionController,
+      chatSelectionController,
       canvasSelectionController,
       conversationController
     } = this.deps;
@@ -241,12 +246,14 @@ export class InputController {
         : undefined;
       const editorContext = selectionController.getContext();
       const browserContext = browserSelectionController?.getContext() ?? null;
+      const chatContext = chatSelectionController?.getContext() ?? null;
       const canvasContext = canvasSelectionController.getContext();
       const { displayContent, turnRequest } = this.buildTurnSubmission({
         content,
         images,
         editorContextOverride: editorContext,
         browserContextOverride: browserContext,
+        chatContextOverride: chatContext,
         canvasContextOverride: canvasContext,
       });
       state.queuedMessage = this.mergeQueuedMessages(
@@ -305,6 +312,7 @@ export class InputController {
         images: imagesForMessage,
         editorContextOverride: options?.editorContextOverride,
         browserContextOverride: options?.browserContextOverride,
+        chatContextOverride: options?.chatContextOverride,
         canvasContextOverride: options?.canvasContextOverride,
       });
     const { displayContent, turnRequest } = turnSubmission;
@@ -702,6 +710,7 @@ export class InputController {
     images?: ChatMessage['images'];
     editorContextOverride?: EditorSelectionContext | null;
     browserContextOverride?: BrowserSelectionContext | null;
+    chatContextOverride?: ChatSelectionContext | null;
     canvasContextOverride?: CanvasSelectionContext | null;
   }): {
     displayContent: string;
@@ -710,6 +719,7 @@ export class InputController {
     const {
       selectionController,
       browserSelectionController,
+      chatSelectionController,
       canvasSelectionController,
     } = this.deps;
 
@@ -726,6 +736,9 @@ export class InputController {
     const browserContext = options.browserContextOverride !== undefined
       ? options.browserContextOverride
       : (browserSelectionController?.getContext() ?? null);
+    const chatContext = options.chatContextOverride !== undefined
+      ? options.chatContextOverride
+      : (chatSelectionController?.getContext() ?? null);
     const canvasContext = options.canvasContextOverride !== undefined
       ? options.canvasContextOverride
       : canvasSelectionController.getContext();
@@ -745,6 +758,7 @@ export class InputController {
         currentNotePath: shouldSendCurrentNote && currentNotePath ? currentNotePath : undefined,
         editorSelection: editorContext,
         browserSelection: browserContext,
+        chatSelection: chatContext,
         canvasSelection: canvasContext,
         externalContextPaths: externalContextPaths && externalContextPaths.length > 0
           ? externalContextPaths
@@ -815,6 +829,7 @@ export class InputController {
       images: request.images,
       editorContext: request.editorSelection ?? null,
       browserContext: request.browserSelection ?? null,
+      ...(request.chatSelection ? { chatSelection: request.chatSelection } : {}),
       canvasContext: request.canvasSelection ?? null,
       turnRequest: request,
     };
@@ -835,6 +850,7 @@ export class InputController {
         images: message.images ? [...message.images] : undefined,
         editorSelection: message.editorContext,
         browserSelection: message.browserContext ?? null,
+        ...(message.chatSelection !== undefined && { chatSelection: message.chatSelection }),
         canvasSelection: message.canvasContext,
       },
     };

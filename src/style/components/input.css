@@ -59,6 +59,7 @@
 /* Indicator: 12px text + 10px padding (5+5) + 2px border = 24px */
 .claudian-selection-indicator,
 .claudian-browser-selection-indicator,
+.claudian-chat-selection-indicator,
 .claudian-canvas-indicator {
   color: #7abaff;
   font-size: 12px;

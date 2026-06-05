@@ -156,6 +156,9 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     selectionController: {
       getContext: jest.fn().mockReturnValue(null),
     } as any,
+    chatSelectionController: {
+      getContext: jest.fn().mockReturnValue(null),
+    } as any,
     canvasSelectionController: {
       getContext: jest.fn().mockReturnValue(null),
     } as any,
@@ -247,6 +250,29 @@ describe('InputController - Message Queue', () => {
         canvasSelection: null,
       });
       expect(inputEl.value).toBe('');
+    });
+
+    it('should queue message with chat selection context', async () => {
+      const chatSelection = {
+        selectedText: 'selected assistant answer',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant' as const,
+      };
+      deps.state.isStreaming = true;
+      (deps.chatSelectionController!.getContext as jest.Mock).mockReturnValue(chatSelection);
+      inputEl.value = 'queued message';
+
+      await controller.sendMessage();
+
+      expect(deps.state.queuedMessage).toMatchObject({
+        content: 'queued message',
+        chatSelection,
+      });
+      expect(deps.state.queuedMessage?.turnRequest).toMatchObject({
+        text: 'queued message',
+        chatSelection,
+      });
     });
 
     it('should queue message with images when streaming', async () => {
@@ -2150,6 +2176,38 @@ describe('InputController - Message Queue', () => {
       const promptSent = queryCall[0].prompt;
       expect(promptSent).toContain('<editor_selection path="test/note.md">\n  selected text\nsecond line  \n</editor_selection>');
       expect(promptSent).not.toContain('lines=');
+    });
+  });
+
+  describe('Chat context', () => {
+    it('should append chat selection context to prompt when available', async () => {
+      const chatSelection = {
+        selectedText: 'selected assistant answer',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant' as const,
+      };
+
+      deps = createSendableDeps();
+      (deps.chatSelectionController!.getContext as jest.Mock).mockReturnValue(chatSelection);
+
+      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
+        createMockStream([{ type: 'done' }])
+      );
+
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      const prepareTurnCall = ((deps as any).mockAgentService.prepareTurn as jest.Mock).mock.calls[0];
+      expect(prepareTurnCall[0].chatSelection).toEqual(chatSelection);
+
+      const queryCall = ((deps as any).mockAgentService.query as jest.Mock).mock.calls[0];
+      const promptSent = queryCall[0].prompt;
+      expect(promptSent).toContain('<chat_selection lines="1" role="assistant" message_id="assistant-1">');
+      expect(promptSent).toContain('selected assistant answer');
     });
   });
 

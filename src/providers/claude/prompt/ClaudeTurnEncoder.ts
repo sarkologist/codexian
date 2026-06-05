@@ -2,6 +2,7 @@ import type { McpServerManager } from '../../../core/mcp/McpServerManager';
 import type { ChatTurnRequest, PreparedChatTurn } from '../../../core/runtime/types';
 import { appendBrowserContext } from '../../../utils/browser';
 import { appendCanvasContext } from '../../../utils/canvas';
+import { appendChatSelectionContext } from '../../../utils/chatSelection';
 import { appendCurrentNote } from '../../../utils/context';
 import { appendEditorContext } from '../../../utils/editor';
 
@@ -27,6 +28,10 @@ export function encodeClaudeTurn(
 
     if (request.browserSelection) {
       persistedContent = appendBrowserContext(persistedContent, request.browserSelection);
+    }
+
+    if (request.chatSelection) {
+      persistedContent = appendChatSelectionContext(persistedContent, request.chatSelection);
     }
 
     if (request.canvasSelection) {
