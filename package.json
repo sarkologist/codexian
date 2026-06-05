@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
     "build:css": "node scripts/build-css.mjs",
+    "install:local": "node scripts/install-build.mjs",
     "dev": "npm run build:css && node esbuild.config.mjs",
     "build": "node scripts/build.mjs production",
     "typecheck": "tsc --noEmit",
