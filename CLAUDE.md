@@ -75,6 +75,7 @@ Tests mirror the `src/` layout under `tests/unit/` and `tests/integration/`.
 - **Runtime exploration**: For provider integrations, inspect real runtime output first. Claude data lands under `~/.claude/` and Codex data under `~/.codex/`. Real transcripts beat guessed event shapes. Put throwaway local scripts in `.context/`; only promote durable tooling into `dev/`.
 - **Comments**: Comment why, not what. Avoid narration and redundant JSDoc.
 - **TDD workflow**: For new behavior or bug fixes, write the failing test first in the mirrored `tests/` path, make it pass, then refactor.
+- **Commit after changes**: After making code, test, build, or policy changes, create a focused git commit before the final response unless the user explicitly says not to. Stage only files touched for the requested work and never include unrelated dirty worktree changes.
 - Run `npm run typecheck && npm run lint && npm run test && npm run build` after editing.
 - No `console.*` in production code.
 - Put non-committed notes, handoff files, and throwaway scripts in `.context/`.
