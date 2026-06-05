@@ -1171,6 +1171,28 @@ describe('MessageRenderer', () => {
     );
   });
 
+  it('renderContent passes completed inline and block math through unescaped', async () => {
+    const { MarkdownRenderer } = await import('obsidian');
+    const { renderer } = createRenderer();
+    const el = createMockEl();
+    const markdown = [
+      'Inline $x + y$',
+      '',
+      '$$',
+      'x^2 + y^2 = z^2',
+      '$$',
+    ].join('\n');
+
+    await renderer.renderContent(el, markdown);
+
+    expect(MarkdownRenderer.renderMarkdown).toHaveBeenCalledWith(
+      markdown,
+      el,
+      '',
+      expect.anything()
+    );
+  });
+
   // ============================================
   // addTextCopyButton - click behavior
   // ============================================

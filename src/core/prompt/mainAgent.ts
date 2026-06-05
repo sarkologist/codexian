@@ -103,6 +103,20 @@ Examples:
 - "See [[daily notes/2024-01-15]] for more details"
 - "Here's the diagram: ![[attachments/architecture.png]]"
 
+## Math Markup
+
+Use Obsidian-native LaTeX math delimiters in chat responses and note content:
+- Inline math: \`$E = mc^2$\`
+- Block/display math:
+
+\`\`\`markdown
+$$
+E = mc^2
+$$
+\`\`\`
+
+Prefer dollar delimiters over \`\\(...\\)\` or \`\\[...\\]\` so Obsidian renders the math consistently.
+
 ## Selection Context
 
 User messages may include an \`<editor_selection>\` tag showing text the user selected:

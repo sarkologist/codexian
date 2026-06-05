@@ -34,6 +34,15 @@ describe('systemPrompt', () => {
       expect(prompt).toContain('# User Message Format');
     });
 
+    it('should include Obsidian math markup instructions', () => {
+      const prompt = buildSystemPrompt();
+
+      expect(prompt).toContain('## Math Markup');
+      expect(prompt).toContain('Inline math: `$E = mc^2$`');
+      expect(prompt).toContain('$$\nE = mc^2\n$$');
+      expect(prompt).toContain('Prefer dollar delimiters over `\\(...\\)` or `\\[...\\]`');
+    });
+
     it('should omit Claude-specific tool guidance from the shared prompt', () => {
       const prompt = buildSystemPrompt();
 

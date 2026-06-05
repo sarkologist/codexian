@@ -11,6 +11,24 @@ describe('markdownMath', () => {
       );
     });
 
+    it('escapes multiline display math delimiters outside code', () => {
+      const markdown = [
+        'Before',
+        '$$',
+        'x^2 + y^2 = z^2',
+        '$$',
+        'After',
+      ].join('\n');
+
+      expect(escapeMathDelimitersForStreaming(markdown)).toBe([
+        'Before',
+        '\\$\\$',
+        'x^2 + y^2 = z^2',
+        '\\$\\$',
+        'After',
+      ].join('\n'));
+    });
+
     it('preserves inline code and fenced code dollars', () => {
       const markdown = [
         'Text $x$',
@@ -47,6 +65,7 @@ describe('markdownMath', () => {
   describe('hasStreamingMathDelimiters', () => {
     it('detects unescaped dollars outside code', () => {
       expect(hasStreamingMathDelimiters('math $x$')).toBe(true);
+      expect(hasStreamingMathDelimiters('math\n$$\nx^2\n$$')).toBe(true);
       expect(hasStreamingMathDelimiters('`echo $PATH`')).toBe(false);
       expect(hasStreamingMathDelimiters('\\$5')).toBe(false);
     });

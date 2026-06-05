@@ -267,6 +267,27 @@ describe('StreamController - Text Content', () => {
       );
     });
 
+    it('should defer block math rendering during live text renders', async () => {
+      deps.state.currentTextEl = createMockEl();
+      const blockMath = [
+        'Block:',
+        '$$',
+        'x^2 + y^2 = z^2',
+        '$$',
+      ].join('\n');
+
+      await controller.appendText(blockMath);
+
+      jest.advanceTimersByTime(16);
+      await Promise.resolve();
+
+      expect(deps.renderer.renderContent).toHaveBeenCalledWith(
+        deps.state.currentTextEl,
+        blockMath,
+        { deferMath: true }
+      );
+    });
+
     it('should honor disabled deferred math rendering setting during live text renders', async () => {
       (deps.plugin.settings as any).deferMathRenderingDuringStreaming = false;
       deps.state.currentTextEl = createMockEl();
@@ -322,6 +343,35 @@ describe('StreamController - Text Content', () => {
       expect(deps.renderer.addTextCopyButton).toHaveBeenCalledWith(
         expect.anything(),
         'Final $x^2$'
+      );
+    });
+
+    it('should render original block math once when finalizing a deferred text block', async () => {
+      const msg = createTestMessage();
+      const blockMath = [
+        'Final block:',
+        '$$',
+        '\\int_0^1 x^2 dx',
+        '$$',
+      ].join('\n');
+
+      await controller.appendText(blockMath);
+      await controller.finalizeCurrentTextBlock(msg);
+
+      expect(deps.renderer.renderContent).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        blockMath,
+        { deferMath: true }
+      );
+      expect(deps.renderer.renderContent).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        blockMath
+      );
+      expect(deps.renderer.addTextCopyButton).toHaveBeenCalledWith(
+        expect.anything(),
+        blockMath
       );
     });
   });

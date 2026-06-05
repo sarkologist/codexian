@@ -141,6 +141,19 @@
   margin-bottom: 0;
 }
 
+.claudian-message-content .math.math-block,
+.claudian-message-content mjx-container[display="true"] {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.claudian-message-content mjx-container {
+  max-width: 100%;
+}
+
 .claudian-message-content .math,
 .claudian-message-content .math *,
 .claudian-message-content mjx-container,
