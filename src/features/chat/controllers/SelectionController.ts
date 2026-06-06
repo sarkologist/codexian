@@ -1,4 +1,4 @@
-import type { App } from 'obsidian';
+import type { App, Editor, View } from 'obsidian';
 import { MarkdownView } from 'obsidian';
 
 import { hideSelectionHighlight, showSelectionHighlight } from '../../../shared/components/SelectionHighlight';
@@ -16,6 +16,12 @@ type CustomHighlightRegistry = {
   set: (name: string, highlight: unknown) => void;
 };
 type CustomHighlightConstructor = new (...ranges: Range[]) => unknown;
+type SelectionFileView = View & {
+  containerEl?: HTMLElement;
+  editor?: Editor;
+  file?: { path?: unknown };
+  getMode?: () => string;
+};
 
 export class SelectionController {
   private app: App;
@@ -84,24 +90,66 @@ export class SelectionController {
   // ============================================
 
   private poll(): void {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const view = this.getActiveSelectionView();
     if (!view) {
       // Keep the captured selection only while focus is transitioning into
       // the chat UI; any other leaf switch should drop stale prompt context.
-      this.clearWhenMarkdownContextIsUnavailable();
+      this.handleSelectionContextUnavailable();
       return;
     }
 
-    // Reading/preview mode has no usable CM6 selection — use DOM selection instead
-    if (view.getMode() === 'preview') {
-      this.pollReadingMode(view);
+    if (this.isMarkdownSourceView(view)) {
+      this.pollMarkdownSourceMode(view);
       return;
     }
 
+    if (this.isDOMSelectionView(view)) {
+      this.pollDOMSelection(view);
+      return;
+    }
+
+    this.handleSelectionContextUnavailable();
+  }
+
+  private getActiveSelectionView(): SelectionFileView | null {
+    const activeLeaf = this.app.workspace.getMostRecentLeaf?.();
+    const activeView = activeLeaf?.view as SelectionFileView | undefined;
+    if (activeView) return activeView;
+
+    return (this.app.workspace.getActiveViewOfType?.(MarkdownView) as SelectionFileView | null | undefined)
+      ?? null;
+  }
+
+  private isMarkdownView(view: SelectionFileView): boolean {
+    return view instanceof MarkdownView
+      || (typeof view.getMode === 'function' && view.editor !== undefined);
+  }
+
+  private isMarkdownSourceView(view: SelectionFileView): view is SelectionFileView & { editor: Editor } {
+    return this.isMarkdownView(view) && view.getMode?.() !== 'preview' && view.editor !== undefined;
+  }
+
+  private isPDFFileView(view: SelectionFileView): boolean {
+    const path = this.getViewPath(view);
+    return path.toLowerCase().endsWith('.pdf');
+  }
+
+  private isDOMSelectionView(view: SelectionFileView): boolean {
+    return (this.isMarkdownView(view) && view.getMode?.() === 'preview')
+      || this.isPDFFileView(view);
+  }
+
+  private getViewPath(view: SelectionFileView): string {
+    return typeof view.file?.path === 'string' && view.file.path
+      ? view.file.path
+      : 'unknown';
+  }
+
+  private pollMarkdownSourceMode(view: SelectionFileView & { editor: Editor }): void {
     const editor = view.editor;
     const editorView = getEditorView(editor);
     if (!editorView) {
-      this.clearWhenMarkdownContextIsUnavailable();
+      this.handleSelectionContextUnavailable();
       return;
     }
 
@@ -115,7 +163,7 @@ export class SelectionController {
       const to = editor.posToOffset(toPos);
       const startLine = fromPos.line + 1; // 1-indexed for display
 
-      const notePath = view.file?.path || 'unknown';
+      const notePath = this.getViewPath(view);
       const lineCount = selectedText.split(/\r?\n/).length;
       const signature = this.buildEditorSelectionSignature(notePath, selectedText, lineCount, startLine, from, to, editorView);
       if (signature === this.dismissedSelectionSignature) return;
@@ -144,10 +192,10 @@ export class SelectionController {
     }
   }
 
-  private pollReadingMode(view: MarkdownView): void {
+  private pollDOMSelection(view: SelectionFileView): void {
     const containerEl = view.containerEl;
     if (!containerEl) {
-      this.clearWhenMarkdownContextIsUnavailable();
+      this.handleSelectionContextUnavailable();
       return;
     }
 
@@ -166,7 +214,7 @@ export class SelectionController {
       }
 
       this.inputHandoffGraceUntil = null;
-      const notePath = view.file?.path || 'unknown';
+      const notePath = this.getViewPath(view);
       const lineCount = selectedText.split(/\r?\n/).length;
       const domRanges = this.cloneDOMRanges(selection);
       const signature = this.buildPreviewSelectionSignature(notePath, selectedText, lineCount, domRanges);
@@ -352,7 +400,7 @@ export class SelectionController {
     return this.selectionMatchesRanges(this.getDocumentSelection(this.focusScopeEl.ownerDocument), ranges);
   }
 
-  private clearWhenMarkdownContextIsUnavailable(): void {
+  private handleSelectionContextUnavailable(): void {
     this.inputHandoffGraceUntil = null;
   }
 
