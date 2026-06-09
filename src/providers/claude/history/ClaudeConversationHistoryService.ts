@@ -8,6 +8,7 @@ import type {
   SubagentInfo,
   ToolCallInfo,
 } from '../../../core/types';
+import { attachVaultTurnDiffsToMessages } from '../../../utils/vaultTurnDiff';
 import { type ClaudeProviderState, getClaudeState } from '../types/providerState';
 import {
   deleteSDKSession,
@@ -428,6 +429,7 @@ export class ClaudeConversationHistoryService implements ProviderConversationHis
     }
 
     conversation.messages = merged;
+    attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
     this.hydratedConversationIds.add(conversation.id);
   }
 

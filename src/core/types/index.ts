@@ -34,6 +34,10 @@ export {
   type DiffStats,
   type SDKToolUseResult,
   type StructuredPatchHunk,
+  type VaultTurnDiff,
+  type VaultTurnDiffFile,
+  type VaultTurnDiffFileKind,
+  type VaultTurnDiffFileMode,
 } from './diff';
 
 // Tool types

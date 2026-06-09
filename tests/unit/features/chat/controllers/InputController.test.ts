@@ -55,6 +55,55 @@ async function* createMockStream(chunks: any[]) {
   }
 }
 
+class FakeVaultAdapter {
+  files = new Map<string, string>();
+  stats = new Map<string, { mtime: number; size: number }>();
+
+  constructor(initialFiles: Record<string, string>) {
+    for (const [path, content] of Object.entries(initialFiles)) {
+      this.set(path, content, 1);
+    }
+  }
+
+  async list(folder: string): Promise<{ files: string[]; folders: string[] }> {
+    const prefix = folder ? `${folder}/` : '';
+    const files = new Set<string>();
+    const folders = new Set<string>();
+
+    for (const path of this.files.keys()) {
+      if (!path.startsWith(prefix)) continue;
+      const rest = path.slice(prefix.length);
+      if (!rest) continue;
+      const slashIndex = rest.indexOf('/');
+      if (slashIndex === -1) {
+        files.add(path);
+      } else {
+        folders.add(prefix + rest.slice(0, slashIndex));
+      }
+    }
+
+    return {
+      files: [...files].sort(),
+      folders: [...folders].sort(),
+    };
+  }
+
+  async read(path: string): Promise<string> {
+    const content = this.files.get(path);
+    if (content === undefined) throw new Error('missing');
+    return content;
+  }
+
+  async stat(path: string): Promise<{ mtime: number; size: number } | null> {
+    return this.stats.get(path) ?? null;
+  }
+
+  set(path: string, content: string, mtime = 2): void {
+    this.files.set(path, content);
+    this.stats.set(path, { mtime, size: content.length });
+  }
+}
+
 const mockMcpForEncoder = {
   extractMentions: jest.fn().mockReturnValue(new Set<string>()),
   transformMentions: jest.fn().mockImplementation((text: string) => text),
@@ -144,6 +193,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       refreshActionButtons: jest.fn(),
       removeMessage: jest.fn(),
       updateLiveUserMessage: jest.fn(),
+      appendVaultTurnDiff: jest.fn(),
     } as any,
     streamController: {
       showThinkingIndicator: jest.fn(),
@@ -980,6 +1030,58 @@ describe('InputController - Message Queue', () => {
       expect(deps.conversationController.save).toHaveBeenCalledWith(true, undefined);
       expect((deps as any).mockAgentService.query).toHaveBeenCalled();
       expect(deps.state.isStreaming).toBe(false);
+    });
+
+    it('does not append a vault diff card when the turn leaves vault files unchanged', async () => {
+      const adapter = new FakeVaultAdapter({ 'note.md': 'same' });
+      (deps.plugin as any).app = { vault: { adapter } };
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() =>
+        createMockStream([{ type: 'done' }])
+      );
+
+      inputEl.value = 'check files';
+
+      await controller.sendMessage();
+
+      expect(deps.renderer.appendVaultTurnDiff).not.toHaveBeenCalled();
+      const assistantMsg = deps.state.messages.find(msg => msg.role === 'assistant');
+      expect(assistantMsg?.contentBlocks?.some(block => block.type === 'vault_diff')).toBe(false);
+    });
+
+    it('appends one vault diff card for files changed during the agent turn', async () => {
+      const adapter = new FakeVaultAdapter({
+        'note.md': 'old',
+        '.claudian/internal.json': '{}',
+      });
+      (deps.plugin as any).app = { vault: { adapter } };
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.consumeTurnMetadata = jest.fn().mockReturnValue({
+        assistantMessageId: 'assistant-native',
+      });
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(async function* () {
+        adapter.set('note.md', 'new');
+        adapter.set('.claudian/internal.json', '{"changed":true}');
+        adapter.set('created.md', 'hello');
+        yield { type: 'done' };
+      });
+
+      inputEl.value = 'change files';
+
+      await controller.sendMessage();
+
+      const assistantMsg = deps.state.messages.find(msg => msg.role === 'assistant')!;
+      expect(assistantMsg.contentBlocks).toContainEqual({
+        type: 'vault_diff',
+        diffId: 'assistant-native',
+      });
+      expect(assistantMsg.vaultDiffs?.['assistant-native'].files.map(file => file.path)).toEqual([
+        '.claudian/internal.json',
+        'created.md',
+        'note.md',
+      ]);
+      expect(deps.renderer.appendVaultTurnDiff).toHaveBeenCalledTimes(1);
+      expect(deps.renderer.appendVaultTurnDiff).toHaveBeenCalledWith(assistantMsg, 'assistant-native');
     });
 
     it('should persist replay-safe user content instead of transport-only prompt', async () => {

@@ -462,6 +462,39 @@ describe('MessageRenderer', () => {
     expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'Real content');
   });
 
+  it('renders an assistant message that only contains a vault diff block', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+
+    const msg: ChatMessage = {
+      id: 'assistant-local',
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      contentBlocks: [{ type: 'vault_diff', diffId: 'assistant-native' } as any],
+      vaultDiffs: {
+        'assistant-native': {
+          id: 'assistant-native',
+          createdAt: 1,
+          fileCount: 1,
+          stats: { added: 1, removed: 0 },
+          files: [{
+            path: 'note.md',
+            kind: 'added',
+            mode: 'text',
+            diffLines: [{ type: 'insert', text: 'hello', newLineNum: 1 }],
+            stats: { added: 1, removed: 0 },
+          }],
+        },
+      },
+    };
+
+    renderer.renderStoredMessage(msg);
+
+    expect(messagesEl.querySelector('.claudian-vault-diff-block')).not.toBeNull();
+    expect(messagesEl.querySelector('.claudian-vault-diff-name')?.textContent).toBe('Vault changes');
+  });
+
   it('does not render stored Codex write_stdin transport tools', () => {
     const messagesEl = createMockEl();
     const { renderer } = createRenderer(messagesEl, 'codex');

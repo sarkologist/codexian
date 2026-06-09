@@ -7,6 +7,7 @@ import {
   isSubagentToolName,
   isWriteEditTool,
   TOOL_AGENT_OUTPUT,
+  TOOL_APPLY_PATCH,
   TOOL_WRITE_STDIN,
 } from '../../../core/tools/toolNames';
 import { extractToolResultContent } from '../../../core/tools/toolResultContent';
@@ -26,6 +27,7 @@ import {
 } from './SubagentRenderer';
 import { renderStoredThinkingBlock } from './ThinkingBlockRenderer';
 import { renderStoredToolCall } from './ToolCallRenderer';
+import { renderVaultTurnDiff } from './VaultTurnDiffRenderer';
 import { renderStoredWriteEdit } from './WriteEditRenderer';
 
 export interface RenderContentOptions {
@@ -129,6 +131,7 @@ export class MessageRenderer {
     });
 
     const contentEl = msgEl.createDiv({ cls: 'claudian-message-content', attr: { dir: 'auto' } });
+    this.liveMessageEls.set(msg.id, msgEl);
 
     if (msg.role === 'user') {
       const textToShow = msg.displayContent ?? msg.content;
@@ -136,9 +139,6 @@ export class MessageRenderer {
         const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
         void this.renderContent(textEl, textToShow);
         this.addUserCopyButton(msgEl, textToShow);
-      }
-      if (this.rewindCallback || this.forkCallback) {
-        this.liveMessageEls.set(msg.id, msgEl);
       }
     }
 
@@ -291,6 +291,7 @@ export class MessageRenderer {
         if (block.type === 'thinking' && block.content.trim().length > 0) return true;
         if (block.type === 'text' && block.content.trim().length > 0) return true;
         if (block.type === 'context_compacted') return true;
+        if (block.type === 'vault_diff') return !!msg.vaultDiffs?.[block.diffId];
         if (block.type === 'subagent') return true;
         if (block.type === 'tool_use') {
           const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
@@ -330,6 +331,9 @@ export class MessageRenderer {
   private renderAssistantContent(msg: ChatMessage, contentEl: HTMLElement): void {
     if (msg.contentBlocks && msg.contentBlocks.length > 0) {
       const renderedToolIds = new Set<string>();
+      const hasVaultDiffBlock = msg.contentBlocks.some(block =>
+        block.type === 'vault_diff' && !!msg.vaultDiffs?.[block.diffId]
+      );
       for (const block of msg.contentBlocks) {
         if (block.type === 'thinking') {
           renderStoredThinkingBlock(
@@ -349,12 +353,17 @@ export class MessageRenderer {
         } else if (block.type === 'tool_use') {
           const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
           if (toolCall) {
-            this.renderToolCall(contentEl, toolCall, msg);
+            this.renderToolCall(contentEl, toolCall, msg, hasVaultDiffBlock);
             renderedToolIds.add(toolCall.id);
           }
         } else if (block.type === 'context_compacted') {
           const boundaryEl = contentEl.createDiv({ cls: 'claudian-compact-boundary' });
           boundaryEl.createSpan({ cls: 'claudian-compact-boundary-label', text: 'Conversation compacted' });
+        } else if (block.type === 'vault_diff') {
+          const diff = msg.vaultDiffs?.[block.diffId];
+          if (diff) {
+            renderVaultTurnDiff(contentEl, diff);
+          }
         } else if (block.type === 'subagent') {
           const taskToolCall = msg.toolCalls?.find(
             tc => tc.id === block.subagentId && isSubagentToolName(tc.name)
@@ -370,7 +379,7 @@ export class MessageRenderer {
       if (msg.toolCalls && msg.toolCalls.length > 0) {
         for (const toolCall of msg.toolCalls) {
           if (renderedToolIds.has(toolCall.id)) continue;
-          this.renderToolCall(contentEl, toolCall, msg);
+          this.renderToolCall(contentEl, toolCall, msg, hasVaultDiffBlock);
           renderedToolIds.add(toolCall.id);
         }
       }
@@ -403,19 +412,59 @@ export class MessageRenderer {
    * Renders a tool call with special handling for Write/Edit, Agent (subagent),
    * and Codex collab agent lifecycle tools.
    */
-  private renderToolCall(contentEl: HTMLElement, toolCall: ToolCallInfo, msg?: ChatMessage): void {
+  private renderToolCall(
+    contentEl: HTMLElement,
+    toolCall: ToolCallInfo,
+    msg?: ChatMessage,
+    suppressDiffContent = false,
+  ): void {
     if (!this.shouldRenderToolCall(toolCall)) return;
     const subagentLifecycleAdapter = this.getSubagentLifecycleAdapter(toolCall.name);
 
     if (isWriteEditTool(toolCall.name)) {
-      renderStoredWriteEdit(contentEl, toolCall);
+      renderStoredWriteEdit(contentEl, toolCall, { suppressDiffContent });
     } else if (isSubagentToolName(toolCall.name)) {
       this.renderTaskSubagent(contentEl, toolCall);
     } else if (subagentLifecycleAdapter?.isSpawnTool(toolCall.name) && msg) {
       this.renderProviderLifecycleSubagent(contentEl, toolCall, msg);
+    } else if (suppressDiffContent && toolCall.name === TOOL_APPLY_PATCH) {
+      renderStoredToolCall(contentEl, toolCall, { suppressDiffContent: true });
     } else {
       renderStoredToolCall(contentEl, toolCall);
     }
+  }
+
+  appendVaultTurnDiff(msg: ChatMessage, diffId: string): void {
+    const diff = msg.vaultDiffs?.[diffId];
+    if (!diff) return;
+
+    const msgEl = this.liveMessageEls.get(msg.id)
+      ?? this.messagesEl.querySelector<HTMLElement>(`[data-message-id="${msg.id}"]`);
+    const contentEl = msgEl?.querySelector<HTMLElement>('.claudian-message-content');
+    if (!contentEl) return;
+
+    renderVaultTurnDiff(contentEl, diff);
+    this.suppressInlineDiffsForMessage(msg.id);
+    this.scrollToBottom();
+  }
+
+  suppressInlineDiffsForMessage(messageId: string): void {
+    const msgEl = this.liveMessageEls.get(messageId)
+      ?? this.messagesEl.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!msgEl) return;
+
+    msgEl.querySelectorAll<HTMLElement>('.claudian-write-edit-content').forEach((contentEl) => {
+      if (!contentEl.querySelector('.claudian-write-edit-diff')) return;
+      contentEl.empty();
+      const row = contentEl.createDiv({ cls: 'claudian-write-edit-diff-row' });
+      row.createDiv({ cls: 'claudian-write-edit-done-text', text: 'Included in vault changes' });
+    });
+
+    msgEl.querySelectorAll<HTMLElement>('.claudian-tool-content').forEach((contentEl) => {
+      if (!contentEl.querySelector('.claudian-tool-patch-section')) return;
+      contentEl.empty();
+      contentEl.createDiv({ cls: 'claudian-tool-empty', text: 'Included in vault changes' });
+    });
   }
 
   private shouldRenderToolCall(toolCall: ToolCallInfo): boolean {

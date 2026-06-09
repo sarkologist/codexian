@@ -20,6 +20,10 @@ export interface WriteEditState {
   diffLines?: DiffLine[];
 }
 
+export interface StoredWriteEditOptions {
+  suppressDiffContent?: boolean;
+}
+
 function shortenPath(filePath: string, maxLength = 40): string {
   if (!filePath) return 'file';
   // Normalize path separators for cross-platform support
@@ -151,7 +155,11 @@ export function finalizeWriteEditBlock(state: WriteEditState, isError: boolean):
   }
 }
 
-export function renderStoredWriteEdit(parentEl: HTMLElement, toolCall: ToolCallInfo): HTMLElement {
+export function renderStoredWriteEdit(
+  parentEl: HTMLElement,
+  toolCall: ToolCallInfo,
+  options: StoredWriteEditOptions = {},
+): HTMLElement {
   const filePath = (toolCall.input.file_path as string) || 'file';
   const toolName = toolCall.name;
   const isError = toolCall.status === 'error' || toolCall.status === 'blocked';
@@ -197,7 +205,10 @@ export function renderStoredWriteEdit(parentEl: HTMLElement, toolCall: ToolCallI
   // Render diff if available
   const row = contentEl.createDiv({ cls: 'claudian-write-edit-diff-row' });
 
-  if (toolCall.diffData && toolCall.diffData.diffLines.length > 0) {
+  if (toolCall.diffData && toolCall.diffData.diffLines.length > 0 && options.suppressDiffContent) {
+    const doneEl = row.createDiv({ cls: 'claudian-write-edit-done-text' });
+    doneEl.setText('Included in vault changes');
+  } else if (toolCall.diffData && toolCall.diffData.diffLines.length > 0) {
     const diffEl = row.createDiv({ cls: 'claudian-write-edit-diff' });
     renderDiffContent(diffEl, toolCall.diffData.diffLines);
   } else if (isError && toolCall.result) {

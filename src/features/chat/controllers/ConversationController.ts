@@ -7,6 +7,7 @@ import type { Conversation } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type ClaudianPlugin from '../../../main';
 import { confirm } from '../../../shared/modals/ConfirmModal';
+import { collectVaultTurnDiffsFromMessages } from '../../../utils/vaultTurnDiff';
 import type { MessageRenderer } from '../rendering/MessageRenderer';
 import { cleanupThinkingBlock } from '../rendering/ThinkingBlockRenderer';
 import { findRewindContext } from '../rewind';
@@ -416,6 +417,7 @@ export class ConversationController {
     const { updates: sessionUpdates } = agentService
       ? agentService.buildSessionUpdates({ conversation, sessionInvalidated })
       : { updates: {} };
+    const turnDiffs = collectVaultTurnDiffsFromMessages(state.messages);
 
     const updates: Partial<Conversation> = {
       ...sessionUpdates,
@@ -424,6 +426,7 @@ export class ConversationController {
       externalContextPaths: externalContextPaths.length > 0 ? externalContextPaths : undefined,
       usage: state.usage ?? undefined,
       enabledMcpServers: enabledMcpServers.length > 0 ? enabledMcpServers : undefined,
+      ...(turnDiffs || conversation?.turnDiffs ? { turnDiffs } : {}),
     };
 
     if (updateLastResponse) {

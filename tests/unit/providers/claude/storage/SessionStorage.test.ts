@@ -300,6 +300,44 @@ describe('SessionStorage', () => {
       expect(loaded!.providerId).toBe('codex');
       expect((loaded!.providerState as any)?.codexSpecific).toBe('data');
     });
+
+    it('round-trips persisted turn diffs', async () => {
+      const conversation: Conversation = {
+        id: 'conv-diff-rt',
+        providerId: 'claude' as ProviderId,
+        title: 'Diff Round Trip',
+        createdAt: 1700000000,
+        updatedAt: 1700001000,
+        sessionId: 'sdk-session',
+        messages: [],
+        turnDiffs: {
+          'assistant-native': {
+            id: 'assistant-native',
+            createdAt: 1700001000,
+            fileCount: 1,
+            stats: { added: 1, removed: 0 },
+            files: [{
+              path: 'note.md',
+              kind: 'added',
+              mode: 'text',
+              diffLines: [{ type: 'insert', text: 'hello', newLineNum: 1 }],
+              stats: { added: 1, removed: 0 },
+            }],
+          },
+        },
+      };
+
+      const metadata = storage.toSessionMetadata(conversation);
+      await storage.saveMetadata(metadata);
+
+      const writtenContent = mockAdapter.write.mock.calls[0][1];
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.read.mockResolvedValue(writtenContent);
+
+      const loaded = await storage.loadMetadata('conv-diff-rt');
+
+      expect(loaded!.turnDiffs?.['assistant-native'].files[0].path).toBe('note.md');
+    });
   });
 
   describe('deleteMetadata', () => {

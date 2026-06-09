@@ -2,6 +2,7 @@ import * as fs from 'fs';
 
 import type { ProviderConversationHistoryService } from '../../../core/providers/types';
 import type { Conversation } from '../../../core/types';
+import { attachVaultTurnDiffsToMessages } from '../../../utils/vaultTurnDiff';
 import type { CodexProviderState } from '../types';
 import { getCodexState } from '../types';
 import {
@@ -35,6 +36,7 @@ export class CodexConversationHistoryService implements ProviderConversationHist
 
     // Pending fork with existing in-memory messages: keep them as-is
     if (this.isPendingForkConversation(conversation) && conversation.messages.length > 0) {
+      attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
       return;
     }
 
@@ -51,6 +53,7 @@ export class CodexConversationHistoryService implements ProviderConversationHist
         return;
       }
       conversation.messages = truncated.flatMap(t => t.messages);
+      attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
       return;
     }
 
@@ -87,6 +90,7 @@ export class CodexConversationHistoryService implements ProviderConversationHist
         }
 
         conversation.messages = messages;
+        attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
         this.hydratedConversationPaths.set(conversation.id, `fork::${state.threadId}`);
         return;
       }
@@ -112,6 +116,7 @@ export class CodexConversationHistoryService implements ProviderConversationHist
       conversation.messages.length > 0
       && this.hydratedConversationPaths.get(conversation.id) === hydrationKey
     ) {
+      attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
       return;
     }
 
@@ -137,6 +142,7 @@ export class CodexConversationHistoryService implements ProviderConversationHist
     }
 
     conversation.messages = sdkMessages;
+    attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
     this.hydratedConversationPaths.set(conversation.id, hydrationKey);
   }
 

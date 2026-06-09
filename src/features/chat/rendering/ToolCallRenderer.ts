@@ -273,6 +273,10 @@ interface WebSearchDisplayData {
   pattern: string;
 }
 
+export interface ToolRenderOptions {
+  suppressDiffContent?: boolean;
+}
+
 function normalizeWebSearchDisplayData(input: Record<string, unknown>): WebSearchDisplayData {
   const queries = Array.isArray(input.queries)
     ? input.queries
@@ -532,6 +536,7 @@ function renderApplyPatchExpanded(
   container: HTMLElement,
   input: Record<string, unknown>,
   result: string | undefined,
+  options: ToolRenderOptions = {},
 ): void {
   const patchText = typeof input.patch === 'string' ? input.patch : '';
   const parsedDiffs = getApplyPatchFileDiffs(input);
@@ -541,6 +546,10 @@ function renderApplyPatchExpanded(
   }
 
   if (parsedDiffs.length > 0) {
+    if (options.suppressDiffContent) {
+      container.createDiv({ cls: 'claudian-tool-empty', text: 'Included in vault changes' });
+      return;
+    }
     renderApplyPatchDiffSections(container, parsedDiffs);
     return;
   }
@@ -675,6 +684,7 @@ export function renderExpandedContent(
   toolName: string,
   result: string | undefined,
   input: Record<string, unknown> = {},
+  options: ToolRenderOptions = {},
 ): void {
   if (!result && toolName !== TOOL_WEB_SEARCH && toolName !== TOOL_BASH && toolName !== TOOL_APPLY_PATCH) {
     container.createDiv({ cls: 'claudian-tool-empty', text: 'No result' });
@@ -713,7 +723,7 @@ export function renderExpandedContent(
       renderToolSearchExpanded(container, resolvedResult);
       break;
     case TOOL_APPLY_PATCH:
-      renderApplyPatchExpanded(container, input, result);
+      renderApplyPatchExpanded(container, input, result, options);
       break;
     default:
       renderLinesExpanded(container, resolvedResult, 20);
@@ -1024,7 +1034,8 @@ function createTodoToggleHandler(
 function renderToolContent(
   content: HTMLElement,
   toolCall: ToolCallInfo,
-  initialText?: string
+  initialText?: string,
+  options: ToolRenderOptions = {},
 ): void {
   if (toolCall.name === TOOL_TODO_WRITE) {
     content.addClass('claudian-tool-content-todo');
@@ -1041,7 +1052,7 @@ function renderToolContent(
   } else if (initialText) {
     contentFallback(content, initialText);
   } else {
-    renderExpandedContent(content, toolCall.name, toolCall.result, toolCall.input);
+    renderExpandedContent(content, toolCall.name, toolCall.result, toolCall.input, options);
   }
 }
 
@@ -1129,7 +1140,8 @@ export function updateToolCallResult(
 /** For stored (non-streaming) tool calls — collapsed by default. */
 export function renderStoredToolCall(
   parentEl: HTMLElement,
-  toolCall: ToolCallInfo
+  toolCall: ToolCallInfo,
+  options: ToolRenderOptions = {},
 ): HTMLElement {
   const { toolEl, header, statusEl, content, currentTaskEl } =
     createToolElementStructure(parentEl, toolCall);
@@ -1140,7 +1152,7 @@ export function renderStoredToolCall(
     setGenericToolHeaderRight(statusEl, toolCall);
   }
 
-  renderToolContent(content, toolCall);
+  renderToolContent(content, toolCall, undefined, options);
 
   const state = { isExpanded: false };
   const todoStatusEl = toolCall.name === TOOL_TODO_WRITE ? statusEl : null;

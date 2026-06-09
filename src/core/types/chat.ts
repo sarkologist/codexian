@@ -1,4 +1,4 @@
-import type { SDKToolUseResult } from './diff';
+import type { SDKToolUseResult, VaultTurnDiff } from './diff';
 import type { ProviderId } from './provider';
 import type { SubagentMode, ToolCallInfo } from './tools';
 
@@ -33,7 +33,8 @@ export type ContentBlock =
   | { type: 'tool_use'; toolId: string }
   | { type: 'thinking'; content: string; durationSeconds?: number }
   | { type: 'subagent'; subagentId: string; mode?: SubagentMode }
-  | { type: 'context_compacted' };
+  | { type: 'context_compacted' }
+  | { type: 'vault_diff'; diffId: string };
 
 /** Chat message with content, tool calls, and attachments. */
 export interface ChatMessage {
@@ -59,6 +60,8 @@ export interface ChatMessage {
   userMessageId?: string;
   /** Provider-native assistant message identifier used for rewind/fork checkpoints. */
   assistantMessageId?: string;
+  /** Local display data for turn-level vault diffs keyed by diff id. */
+  vaultDiffs?: Record<string, VaultTurnDiff>;
 }
 
 /** Persisted conversation with messages and session state. */
@@ -85,6 +88,8 @@ export interface Conversation {
   enabledMcpServers?: string[];
   /** Assistant checkpoint identifier for resumeAtMessageId after rewind. */
   resumeAtMessageId?: string;
+  /** Turn-level vault diffs keyed by assistant checkpoint or local message id. */
+  turnDiffs?: Record<string, VaultTurnDiff>;
 }
 
 /** Lightweight conversation metadata for the history dropdown. */
@@ -124,6 +129,8 @@ export interface SessionMetadata {
   usage?: UsageInfo;
   /** Assistant checkpoint identifier for resumeAtMessageId after rewind. */
   resumeAtMessageId?: string;
+  /** Turn-level vault diffs keyed by assistant checkpoint or local message id. */
+  turnDiffs?: Record<string, VaultTurnDiff>;
 }
 
 /**
