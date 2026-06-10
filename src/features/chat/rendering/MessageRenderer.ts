@@ -15,7 +15,7 @@ import type { ChatMessage, ImageAttachment, SubagentInfo, ToolCallInfo } from '.
 import { t } from '../../../i18n/i18n';
 import type ClaudianPlugin from '../../../main';
 import { formatDurationMmSs } from '../../../utils/date';
-import { processFileLinks, registerFileLinkHandler } from '../../../utils/fileLink';
+import { processFileLinks, registerDiffLineHandler, registerFileLinkHandler } from '../../../utils/fileLink';
 import { replaceImageEmbedsWithHtml } from '../../../utils/imageEmbed';
 import { escapeMathDelimitersForStreaming } from '../../../utils/markdownMath';
 import { COMPLETION_DURATION_LABEL } from '../constants';
@@ -85,8 +85,9 @@ export class MessageRenderer {
       reasoningControl: 'none' as const,
     }));
 
-    // Register delegated click handler for file links
+    // Register delegated click handlers for file links and clickable diff lines
     registerFileLinkHandler(this.app, this.messagesEl, this.component);
+    registerDiffLineHandler(this.app, this.messagesEl, this.component);
   }
 
   /** Sets the messages container element. */

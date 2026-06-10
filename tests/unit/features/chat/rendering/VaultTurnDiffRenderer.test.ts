@@ -55,4 +55,39 @@ describe('VaultTurnDiffRenderer', () => {
     expect(blockEl.querySelector('.claudian-vault-diff-note')?.textContent).toBe('Binary file changed');
     expect(blockEl.querySelector('.claudian-vault-diff-size')?.textContent).toBe('before 10 B, after 11 B');
   });
+
+  it('makes diff lines of existing files clickable but not deleted files', () => {
+    const parentEl = createMockEl();
+    const diff: VaultTurnDiff = {
+      id: 'diff-2',
+      createdAt: 1,
+      fileCount: 2,
+      stats: { added: 1, removed: 1 },
+      files: [
+        {
+          path: 'notes/a.md',
+          kind: 'modified',
+          mode: 'text',
+          diffLines: [{ type: 'insert', text: 'new', newLineNum: 4 }],
+          stats: { added: 1, removed: 0 },
+        },
+        {
+          path: 'notes/gone.md',
+          kind: 'deleted',
+          mode: 'text',
+          diffLines: [{ type: 'delete', text: 'bye', oldLineNum: 1 }],
+          stats: { added: 0, removed: 1 },
+        },
+      ],
+    };
+
+    const blockEl = renderVaultTurnDiff(parentEl, diff);
+    const clickable = Array.from(
+      blockEl.querySelectorAll('.claudian-diff-line-clickable'),
+    ) as HTMLElement[];
+
+    expect(clickable).toHaveLength(1);
+    expect(clickable[0].dataset.filePath).toBe('notes/a.md');
+    expect(clickable[0].dataset.line).toBe('4');
+  });
 });

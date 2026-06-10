@@ -36,6 +36,7 @@ jest.mock('@/utils/imageEmbed', () => ({
 jest.mock('@/utils/fileLink', () => ({
   processFileLinks: jest.fn(),
   registerFileLinkHandler: jest.fn(),
+  registerDiffLineHandler: jest.fn(),
 }));
 
 function createMockComponent() {

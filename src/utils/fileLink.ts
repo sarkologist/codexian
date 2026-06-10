@@ -7,7 +7,7 @@
 
 import type { App, Component } from 'obsidian';
 
-import { getVaultFileByPath } from './obsidianCompat';
+import { getVaultFileByPath, openVaultFileAtLine } from './obsidianCompat';
 
 /**
  * Regex pattern to match Obsidian wikilinks in text content.
@@ -160,6 +160,34 @@ export function registerFileLinkHandler(
         void app.workspace.openLinkText(linkTarget, '', 'tab');
       }
     }
+  });
+}
+
+/**
+ * Registers a delegated click handler for clickable vault-diff lines.
+ * Clicking a line opens its file and jumps to the corresponding line.
+ * Should be called once on the messages container.
+ */
+export function registerDiffLineHandler(
+  app: App,
+  container: HTMLElement,
+  component: Component
+): void {
+  component.registerDomEvent(container, 'click', (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    const lineEl = target.closest('.claudian-diff-line-clickable') as HTMLElement | null;
+    if (!lineEl) return;
+
+    // Don't navigate while the user is selecting diff text.
+    const selection = container.win.getSelection();
+    if (selection && !selection.isCollapsed) return;
+
+    const filePath = lineEl.dataset.filePath;
+    const line = Number(lineEl.dataset.line);
+    if (!filePath || !Number.isFinite(line)) return;
+
+    event.preventDefault();
+    void openVaultFileAtLine(app, filePath, line);
   });
 }
 

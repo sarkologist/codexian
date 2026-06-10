@@ -42,7 +42,8 @@ function renderFileSection(parentEl: HTMLElement, file: VaultTurnDiffFile): void
   if (file.diffLines.length > 0) {
     const diffRow = sectionEl.createDiv({ cls: 'claudian-write-edit-diff-row' });
     const diffEl = diffRow.createDiv({ cls: 'claudian-write-edit-diff' });
-    renderDiffContent(diffEl, file.diffLines);
+    // Deleted files no longer exist, so leave their lines non-clickable.
+    renderDiffContent(diffEl, file.diffLines, 3, file.kind === 'deleted' ? undefined : { filePath: file.path });
   } else {
     renderMetadataRow(sectionEl, file);
   }

@@ -142,6 +142,15 @@
   word-break: break-all;
 }
 
+.claudian-diff-line-clickable {
+  cursor: pointer;
+}
+
+/* Inset highlight preserves the insert/delete background colors on hover. */
+.claudian-diff-line-clickable:hover {
+  box-shadow: inset 0 0 0 9999px var(--background-modifier-hover);
+}
+
 .claudian-diff-prefix {
   flex-shrink: 0;
   width: 16px;

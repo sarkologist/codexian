@@ -75,24 +75,44 @@ export function splitIntoHunks(diffLines: DiffLine[], contextLines = 3): DiffHun
 /** Max lines to render for all-inserts diffs (new file creation). */
 const NEW_FILE_DISPLAY_CAP = 20;
 
+export interface RenderDiffContentOptions {
+  /** When set, each rendered line becomes clickable and carries this path + its target line. */
+  filePath?: string;
+}
+
+/**
+ * Tags a rendered diff line so it can be clicked to open `filePath` at its location.
+ * Deleted lines no longer exist in the new file, so they point at the nearest
+ * preceding new-file line (or line 1 when none has been seen yet).
+ */
+function tagClickableLine(lineEl: HTMLElement, filePath: string, targetLine: number): void {
+  lineEl.addClass('claudian-diff-line-clickable');
+  lineEl.dataset.filePath = filePath;
+  lineEl.dataset.line = String(targetLine);
+}
+
 export function renderDiffContent(
   containerEl: HTMLElement,
   diffLines: DiffLine[],
-  contextLines = 3
+  contextLines = 3,
+  opts?: RenderDiffContentOptions
 ): void {
   containerEl.empty();
+
+  const filePath = opts?.filePath;
 
   // New file creation: all lines are inserts — cap display to avoid large DOM
   const allInserts = diffLines.length > 0 && diffLines.every(l => l.type === 'insert');
   if (allInserts && diffLines.length > NEW_FILE_DISPLAY_CAP) {
     const hunkEl = containerEl.createDiv({ cls: 'claudian-diff-hunk' });
-    for (const line of diffLines.slice(0, NEW_FILE_DISPLAY_CAP)) {
+    diffLines.slice(0, NEW_FILE_DISPLAY_CAP).forEach((line, index) => {
       const lineEl = hunkEl.createDiv({ cls: 'claudian-diff-line claudian-diff-insert' });
       const prefixEl = lineEl.createSpan({ cls: 'claudian-diff-prefix' });
       prefixEl.setText('+');
       const contentEl = lineEl.createSpan({ cls: 'claudian-diff-text' });
       contentEl.setText(line.text || ' ');
-    }
+      if (filePath) tagClickableLine(lineEl, filePath, line.newLineNum ?? index + 1);
+    });
     const remaining = diffLines.length - NEW_FILE_DISPLAY_CAP;
     const separator = containerEl.createDiv({ cls: 'claudian-diff-separator' });
     separator.setText(`... ${remaining} more lines`);
@@ -107,6 +127,8 @@ export function renderDiffContent(
     noChanges.setText('No changes');
     return;
   }
+
+  let lastNewLineNum = 0;
 
   hunks.forEach((hunk, hunkIndex) => {
     // Add separator between hunks
@@ -129,6 +151,9 @@ export function renderDiffContent(
       // Line content
       const contentEl = lineEl.createSpan({ cls: 'claudian-diff-text' });
       contentEl.setText(line.text || ' '); // Show space for empty lines
+
+      if (line.newLineNum !== undefined) lastNewLineNum = line.newLineNum;
+      if (filePath) tagClickableLine(lineEl, filePath, line.newLineNum ?? Math.max(1, lastNewLineNum));
     }
   });
 }
