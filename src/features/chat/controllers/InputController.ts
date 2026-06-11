@@ -480,10 +480,10 @@ export class InputController {
           }
         }
 
-        state.currentContentEl = null;
-
         await streamController.finalizeCurrentThinkingBlock(finalAssistantMsg);
         await streamController.finalizeCurrentTextBlock(finalAssistantMsg);
+        streamController.finalizeCurrentTurnTranscript?.();
+        state.currentContentEl = null;
         this.deps.getSubagentManager().resetStreamingState();
 
         await this.attachVaultTurnDiff(beforeVaultSnapshot, finalAssistantMsg);
@@ -1023,6 +1023,7 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.currentTranscriptState = null;
   }
 
   private resetProviderMessageBoundaryState(): void {
@@ -1064,6 +1065,7 @@ export class InputController {
       } else {
         await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
         await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
+        this.deps.streamController.finalizeCurrentTurnTranscript?.();
       }
     }
     this.deps.streamController.hideThinkingIndicator();
@@ -1111,6 +1113,7 @@ export class InputController {
     if (previousAssistant) {
       await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
       await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
+      this.deps.streamController.finalizeCurrentTurnTranscript?.();
     }
 
     const assistantMessage: ChatMessage = {
@@ -1143,6 +1146,7 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.currentTranscriptState = null;
   }
 
   // ============================================

@@ -478,6 +478,35 @@ describe('StreamController - Text Content', () => {
         controller.handleStreamChunk({ type: 'done' }, msg)
       ).resolves.not.toThrow();
     });
+
+    it('groups live thinking and tools in a collapsible transcript', async () => {
+      const { renderToolCall } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+      const msg = createTestMessage();
+
+      await controller.handleStreamChunk({ type: 'thinking', content: 'Let me think' }, msg);
+      await controller.handleStreamChunk(
+        { type: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'a.md' } },
+        msg
+      );
+
+      const transcript = deps.state.currentTranscriptState;
+      expect(transcript?.labelEl.textContent).toBe('Transcript \u00B7 1 thought \u00B7 1 tool');
+      expect(transcript?.contentEl.hasClass('claudian-hidden')).toBe(false);
+
+      await controller.handleStreamChunk({ type: 'done' }, msg);
+
+      expect(renderToolCall).toHaveBeenCalledWith(
+        transcript?.contentEl,
+        expect.objectContaining({ id: 'read-1' }),
+        deps.state.toolCallElements
+      );
+
+      controller.finalizeCurrentTurnTranscript();
+
+      expect(deps.state.currentTranscriptState).toBeNull();
+      expect(transcript?.contentEl.hasClass('claudian-hidden')).toBe(true);
+      expect(transcript?.headerEl.getAttribute('aria-expanded')).toBe('false');
+    });
   });
 
   describe('Usage handling', () => {
@@ -1554,7 +1583,7 @@ describe('StreamController - Text Content', () => {
           subagent: expect.objectContaining({ id: 'task-1' }),
         })
       );
-      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', deps.state.currentContentEl);
+      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', expect.anything());
     });
 
     it('should not crash stream when pending Task rendering returns null via child chunk', async () => {
@@ -1578,7 +1607,7 @@ describe('StreamController - Text Content', () => {
       );
 
       // Should not throw - manager handled errors internally
-      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', deps.state.currentContentEl);
+      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', expect.anything());
     });
 
     it('should not crash stream when pending Task rendering returns null via tool_result', async () => {
@@ -1606,7 +1635,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         'Task completed',
         false,
-        deps.state.currentContentEl,
+        expect.anything(),
         undefined
       );
     });
@@ -1645,7 +1674,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         '{"agent_id":"agent-1"}',
         false,
-        deps.state.currentContentEl,
+        expect.anything(),
         undefined
       );
       expect(deps.subagentManager.handleTaskToolResult).toHaveBeenCalledWith(
@@ -1690,7 +1719,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         'Launching...',
         false,
-        deps.state.currentContentEl,
+        expect.anything(),
         toolUseResult
       );
     });

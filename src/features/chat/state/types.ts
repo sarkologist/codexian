@@ -14,6 +14,7 @@ import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import type { ThinkingBlockState } from '../rendering/ThinkingBlockRenderer';
+import type { TurnTranscriptState } from '../rendering/TurnTranscriptRenderer';
 import type { WriteEditState } from '../rendering/WriteEditRenderer';
 
 /** Queued message waiting to be sent after current streaming completes. */
@@ -73,6 +74,7 @@ export interface ChatStateData {
   currentTextEl: HTMLElement | null;
   currentTextContent: string;
   currentThinkingState: ThinkingBlockState | null;
+  currentTranscriptState: TurnTranscriptState | null;
   thinkingEl: HTMLElement | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */
@@ -135,6 +137,7 @@ export type {
   ThinkingBlockState,
   TodoItem,
   ToolCallInfo,
+  TurnTranscriptState,
   UsageInfo,
   WriteEditState,
 };

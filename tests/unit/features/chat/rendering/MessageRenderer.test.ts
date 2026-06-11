@@ -430,6 +430,17 @@ describe('MessageRenderer', () => {
 
     renderer.renderStoredMessage(msg);
 
+    const msgEl = messagesEl.children[0];
+    const contentEl = msgEl.children[0];
+    const transcriptEl = contentEl.children[0];
+    expect(transcriptEl.hasClass('claudian-turn-transcript')).toBe(true);
+    expect(transcriptEl.hasClass('expanded')).toBe(false);
+    expect(transcriptEl.children[0].children[0].textContent).toBe(
+      'Transcript \u00B7 1 thought \u00B7 3 tools \u00B7 2 subagents'
+    );
+    const textEl = contentEl.children.find((child: any) => child.hasClass('claudian-text-block'));
+    expect(textEl).toBeDefined();
+
     expect(renderStoredThinkingBlock).toHaveBeenCalled();
     expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'Text block');
     // TodoWrite is not rendered inline - only in bottom panel

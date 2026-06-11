@@ -1593,6 +1593,7 @@ export async function destroyTab(tab: TabData): Promise<void> {
 
   cleanupThinkingBlock(tab.state.currentThinkingState);
   tab.state.currentThinkingState = null;
+  tab.state.currentTranscriptState = null;
 
   // Dismiss pending inline prompts before DOM teardown
   tab.controllers.inputController?.dismissPendingApproval();
@@ -1771,6 +1772,7 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
   const previousTextEl = tab.state.currentTextEl;
   const previousTextContent = tab.state.currentTextContent;
   const previousThinkingState = tab.state.currentThinkingState;
+  const previousTranscriptState = tab.state.currentTranscriptState;
 
   if (hasVisibleContent) {
     tab.state.addMessage(assistantMsg);
@@ -1784,6 +1786,7 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
       tab.state.currentTextEl = null;
       tab.state.currentTextContent = '';
       tab.state.currentThinkingState = null;
+      tab.state.currentTranscriptState = null;
     }
   }
 
@@ -1801,6 +1804,7 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
     if (hasVisibleContent) {
       await tab.controllers.streamController?.finalizeCurrentThinkingBlock(assistantMsg);
       await tab.controllers.streamController?.finalizeCurrentTextBlock(assistantMsg);
+      tab.controllers.streamController?.finalizeCurrentTurnTranscript?.();
     }
   } finally {
     if (hasVisibleContent) {
@@ -1810,6 +1814,7 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
       tab.state.currentTextEl = previousTextEl;
       tab.state.currentTextContent = previousTextContent;
       tab.state.currentThinkingState = previousThinkingState;
+      tab.state.currentTranscriptState = previousTranscriptState;
       tab.renderer?.scrollToBottom();
     }
   }

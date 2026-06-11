@@ -27,6 +27,12 @@ import {
 } from './SubagentRenderer';
 import { renderStoredThinkingBlock } from './ThinkingBlockRenderer';
 import { renderStoredToolCall } from './ToolCallRenderer';
+import {
+  createTurnTranscript,
+  incrementTurnTranscriptCount,
+  type TurnTranscriptKind,
+  type TurnTranscriptState,
+} from './TurnTranscriptRenderer';
 import { renderVaultTurnDiff } from './VaultTurnDiffRenderer';
 import { renderStoredWriteEdit } from './WriteEditRenderer';
 
@@ -330,6 +336,25 @@ export class MessageRenderer {
    * Renders assistant message content (content blocks or fallback).
    */
   private renderAssistantContent(msg: ChatMessage, contentEl: HTMLElement): void {
+    let transcriptState: TurnTranscriptState | null = null;
+    const ensureTranscript = (): TurnTranscriptState => {
+      if (!transcriptState) {
+        transcriptState = createTurnTranscript(contentEl, { initiallyExpanded: false });
+      }
+      return transcriptState;
+    };
+    const renderToolInTranscript = (
+      toolCall: ToolCallInfo,
+      hasVaultDiffBlock = false,
+    ): void => {
+      if (!this.shouldRenderToolCall(toolCall)) return;
+      const transcript = ensureTranscript();
+      const kind = this.renderToolCall(transcript.contentEl, toolCall, msg, hasVaultDiffBlock);
+      if (kind) {
+        incrementTurnTranscriptCount(transcript, kind);
+      }
+    };
+
     if (msg.contentBlocks && msg.contentBlocks.length > 0) {
       const renderedToolIds = new Set<string>();
       const hasVaultDiffBlock = msg.contentBlocks.some(block =>
@@ -337,12 +362,14 @@ export class MessageRenderer {
       );
       for (const block of msg.contentBlocks) {
         if (block.type === 'thinking') {
+          const transcript = ensureTranscript();
           renderStoredThinkingBlock(
-            contentEl,
+            transcript.contentEl,
             block.content,
             block.durationSeconds,
             (el, md) => this.renderContent(el, md)
           );
+          incrementTurnTranscriptCount(transcript, 'thought');
         } else if (block.type === 'text') {
           // Skip empty or whitespace-only text blocks to avoid extra gaps
           if (!block.content || !block.content.trim()) {
@@ -354,8 +381,8 @@ export class MessageRenderer {
         } else if (block.type === 'tool_use') {
           const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
           if (toolCall) {
-            this.renderToolCall(contentEl, toolCall, msg, hasVaultDiffBlock);
             renderedToolIds.add(toolCall.id);
+            renderToolInTranscript(toolCall, hasVaultDiffBlock);
           }
         } else if (block.type === 'context_compacted') {
           const boundaryEl = contentEl.createDiv({ cls: 'claudian-compact-boundary' });
@@ -371,7 +398,9 @@ export class MessageRenderer {
           );
           if (!taskToolCall) continue;
 
-          this.renderTaskSubagent(contentEl, taskToolCall, block.mode);
+          const transcript = ensureTranscript();
+          this.renderTaskSubagent(transcript.contentEl, taskToolCall, block.mode);
+          incrementTurnTranscriptCount(transcript, 'subagent');
           renderedToolIds.add(taskToolCall.id);
         }
       }
@@ -380,8 +409,8 @@ export class MessageRenderer {
       if (msg.toolCalls && msg.toolCalls.length > 0) {
         for (const toolCall of msg.toolCalls) {
           if (renderedToolIds.has(toolCall.id)) continue;
-          this.renderToolCall(contentEl, toolCall, msg, hasVaultDiffBlock);
           renderedToolIds.add(toolCall.id);
+          renderToolInTranscript(toolCall, hasVaultDiffBlock);
         }
       }
     } else {
@@ -393,7 +422,7 @@ export class MessageRenderer {
       }
       if (msg.toolCalls) {
         for (const toolCall of msg.toolCalls) {
-          this.renderToolCall(contentEl, toolCall, msg);
+          renderToolInTranscript(toolCall);
         }
       }
     }
@@ -418,20 +447,25 @@ export class MessageRenderer {
     toolCall: ToolCallInfo,
     msg?: ChatMessage,
     suppressDiffContent = false,
-  ): void {
-    if (!this.shouldRenderToolCall(toolCall)) return;
+  ): TurnTranscriptKind | null {
+    if (!this.shouldRenderToolCall(toolCall)) return null;
     const subagentLifecycleAdapter = this.getSubagentLifecycleAdapter(toolCall.name);
 
     if (isWriteEditTool(toolCall.name)) {
       renderStoredWriteEdit(contentEl, toolCall, { suppressDiffContent });
+      return 'tool';
     } else if (isSubagentToolName(toolCall.name)) {
       this.renderTaskSubagent(contentEl, toolCall);
+      return 'subagent';
     } else if (subagentLifecycleAdapter?.isSpawnTool(toolCall.name) && msg) {
       this.renderProviderLifecycleSubagent(contentEl, toolCall, msg);
+      return 'subagent';
     } else if (suppressDiffContent && toolCall.name === TOOL_APPLY_PATCH) {
       renderStoredToolCall(contentEl, toolCall, { suppressDiffContent: true });
+      return 'tool';
     } else {
       renderStoredToolCall(contentEl, toolCall);
+      return 'tool';
     }
   }
 

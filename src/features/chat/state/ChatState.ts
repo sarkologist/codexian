@@ -25,6 +25,7 @@ function createInitialState(): ChatStateData {
     currentTextEl: null,
     currentTextContent: '',
     currentThinkingState: null,
+    currentTranscriptState: null,
     thinkingEl: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
@@ -208,6 +209,14 @@ export class ChatState {
 
   set currentThinkingState(value: ThinkingBlockState | null) {
     this.state.currentThinkingState = value;
+  }
+
+  get currentTranscriptState(): ChatStateData['currentTranscriptState'] {
+    return this.state.currentTranscriptState;
+  }
+
+  set currentTranscriptState(value: ChatStateData['currentTranscriptState']) {
+    this.state.currentTranscriptState = value;
   }
 
   get thinkingEl(): HTMLElement | null {
@@ -398,6 +407,7 @@ export class ChatState {
     this.state.currentTextEl = null;
     this.state.currentTextContent = '';
     this.state.currentThinkingState = null;
+    this.state.currentTranscriptState = null;
     this.state.isStreaming = false;
     this.state.cancelRequested = false;
     // Clear thinking indicator timeout
