@@ -1,14 +1,14 @@
 name: Claude Code Review
 
+# Disabled: the Claude Code GitHub App is not installed on this repo and
+# CLAUDE_CODE_OAUTH_TOKEN is unset, so this job fails OIDC auth (401) on every
+# PR. Code review uses `codex exec review` (see CLAUDE.md). To re-enable,
+# install github.com/apps/claude or set the secret, then restore the
+# pull_request trigger below.
 on:
-  pull_request:
-    types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+  workflow_dispatch:
+  # pull_request:
+  #   types: [opened, synchronize]
 
 jobs:
   claude-review:
