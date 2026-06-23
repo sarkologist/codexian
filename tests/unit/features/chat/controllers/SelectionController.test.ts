@@ -96,6 +96,7 @@ describe('SelectionController', () => {
   let contextRowEl: any;
   let editor: any;
   let editorView: any;
+  let activeView: any;
   let originalDocument: any;
   let originalCSS: any;
 
@@ -129,10 +130,11 @@ describe('SelectionController', () => {
       cm: editorView,
     };
 
-    const view = { editor, getMode: () => 'source', file: { path: 'notes/test.md' } };
+    activeView = { editor, getMode: () => 'source', file: { path: 'notes/test.md' } };
     app = {
       workspace: {
-        getActiveViewOfType: jest.fn().mockReturnValue(view),
+        getMostRecentLeaf: jest.fn(() => activeView ? { view: activeView } : null),
+        getActiveViewOfType: jest.fn(() => activeView),
       },
     };
 
@@ -164,12 +166,14 @@ describe('SelectionController', () => {
     });
     expect(indicatorEl.textContent).toBe('1 line selected');
     expect(indicatorEl.style.display).toBe('block');
+    expect(indicatorEl.getAttribute('title')).toBeNull();
+    expect(indicatorEl.getAttribute('data-tooltip')).toBe('Selected text:\nselected text');
 
     controller.showHighlight();
     expect(showSelectionHighlight).toHaveBeenCalledWith(editorView, 0, 4);
   });
 
-  it('clears selection immediately when deselected without input handoff intent', () => {
+  it('keeps selection after deselecting and clears it only from the indicator', () => {
     controller.start();
     jest.advanceTimersByTime(250);
 
@@ -177,9 +181,43 @@ describe('SelectionController', () => {
     (global as any).document.activeElement = null;
     jest.advanceTimersByTime(250);
 
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.style.display).toBe('block');
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
+
+    indicatorEl.click();
+
     expect(controller.hasSelection()).toBe(false);
     expect(indicatorEl.style.display).toBe('none');
     expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(indicatorEl.getAttribute('data-tooltip')).toBeNull();
+  });
+
+  it('does not recapture the same live editor selection after indicator dismissal', () => {
+    controller.start();
+    jest.advanceTimersByTime(250);
+
+    indicatorEl.click();
+    expect(controller.hasSelection()).toBe(false);
+
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(false);
+
+    editor.getSelection.mockReturnValue('different selected text');
+    jest.advanceTimersByTime(250);
+
+    expect(controller.hasSelection()).toBe(true);
+    expect(controller.getContext()?.selectedText).toBe('different selected text');
+  });
+
+  it('normalizes and truncates selected text in the indicator title', () => {
+    const longText = `first\n   ${'x'.repeat(170)}`;
+    editor.getSelection.mockReturnValue(longText);
+
+    controller.start();
+    jest.advanceTimersByTime(250);
+
+    expect(indicatorEl.getAttribute('data-tooltip')).toBe(`Selected text:\nfirst ${'x'.repeat(154)}...`);
   });
 
   it('preserves selection when focus moves into the chat sidebar', () => {
@@ -187,7 +225,7 @@ describe('SelectionController', () => {
     jest.advanceTimersByTime(250);
     expect(controller.hasSelection()).toBe(true);
 
-    app.workspace.getActiveViewOfType.mockReturnValue(null);
+    activeView = null;
     const sidebarButton = {};
     focusScopeEl.addContainedNode(sidebarButton);
     (global as any).document.activeElement = sidebarButton;
@@ -212,18 +250,18 @@ describe('SelectionController', () => {
     expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
-  it('clears selection when focus leaves markdown and the chat sidebar is not focused', () => {
+  it('keeps selection when focus leaves markdown and the chat sidebar is not focused', () => {
     controller.start();
     jest.advanceTimersByTime(250);
     expect(controller.hasSelection()).toBe(true);
 
-    app.workspace.getActiveViewOfType.mockReturnValue(null);
+    activeView = null;
     (global as any).document.activeElement = null;
     jest.advanceTimersByTime(250);
 
-    expect(controller.hasSelection()).toBe(false);
-    expect(indicatorEl.style.display).toBe('none');
-    expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.style.display).toBe('block');
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
   it('preserves selection when input focus arrives after a slow editor blur handoff', () => {
@@ -245,7 +283,7 @@ describe('SelectionController', () => {
     expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
-  it('clears selection after handoff grace expires when input never receives focus', () => {
+  it('keeps selection after handoff grace expires when input never receives focus', () => {
     controller.start();
     jest.advanceTimersByTime(250);
 
@@ -257,8 +295,8 @@ describe('SelectionController', () => {
     expect(controller.hasSelection()).toBe(true);
 
     jest.advanceTimersByTime(750);
-    expect(controller.hasSelection()).toBe(false);
-    expect(hideSelectionHighlight).toHaveBeenCalledWith(editorView);
+    expect(controller.hasSelection()).toBe(true);
+    expect(hideSelectionHighlight).not.toHaveBeenCalled();
   });
 
   describe('Reading mode (preview)', () => {
@@ -275,7 +313,7 @@ describe('SelectionController', () => {
         file: { path: 'notes/reading.md' },
         containerEl,
       };
-      app.workspace.getActiveViewOfType.mockReturnValue(readingView);
+      activeView = readingView;
     });
 
     it('captures selection via document.getSelection() in reading mode', () => {
@@ -298,6 +336,7 @@ describe('SelectionController', () => {
       });
       expect(indicatorEl.textContent).toBe('1 line selected');
       expect(indicatorEl.style.display).toBe('block');
+      expect(indicatorEl.getAttribute('data-tooltip')).toBe('Selected text:\nreading selection');
     });
 
     it('preserves raw reading mode text and omits line metadata', () => {
@@ -378,7 +417,7 @@ describe('SelectionController', () => {
       );
     });
 
-    it('clears selection when deselected in reading mode', () => {
+    it('keeps reading mode selection after deselecting and clears it only from the indicator', () => {
       const anchorNode = {};
       (global as any).document = {
         activeElement: null,
@@ -396,8 +435,41 @@ describe('SelectionController', () => {
       );
       jest.advanceTimersByTime(250);
 
+      expect(controller.hasSelection()).toBe(true);
+      expect(indicatorEl.style.display).toBe('block');
+
+      indicatorEl.click();
+
       expect(controller.hasSelection()).toBe(false);
       expect(indicatorEl.style.display).toBe('none');
+    });
+
+    it('does not recapture the same live reading mode selection after indicator dismissal', () => {
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('reading selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(true);
+
+      indicatorEl.click();
+      expect(controller.hasSelection()).toBe(false);
+
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(false);
+
+      (global as any).document.getSelection.mockReturnValue(
+        createMockDOMSelection('different reading selection', anchorNode),
+      );
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(true);
+      expect(controller.getContext()?.selectedText).toBe('different reading selection');
     });
 
     it('preserves reading mode selection when input is focused', () => {
@@ -435,7 +507,7 @@ describe('SelectionController', () => {
       jest.advanceTimersByTime(250);
       expect(controller.hasSelection()).toBe(true);
 
-      app.workspace.getActiveViewOfType.mockReturnValue(null);
+      activeView = null;
       const sidebarButton = {};
       focusScopeEl.addContainedNode(sidebarButton);
       (global as any).document.activeElement = sidebarButton;
@@ -445,7 +517,7 @@ describe('SelectionController', () => {
       expect(indicatorEl.style.display).toBe('block');
     });
 
-    it('clears CSS highlight when reading mode selection is deselected', () => {
+    it('clears CSS highlight when reading mode selection is dismissed from the indicator', () => {
       const anchorNode = {};
       (global as any).document = {
         activeElement: null,
@@ -459,10 +531,7 @@ describe('SelectionController', () => {
       controller.start();
       jest.advanceTimersByTime(250);
 
-      (global as any).document.getSelection.mockReturnValue(
-        createMockDOMSelection('', null),
-      );
-      jest.advanceTimersByTime(250);
+      indicatorEl.click();
 
       expect(mockHighlights.delete).toHaveBeenCalledWith('claudian-selection');
     });
@@ -559,14 +628,14 @@ describe('SelectionController', () => {
 
     it('replaces source selection metadata when switching the same text into preview mode', () => {
       const sourceView = { editor, getMode: () => 'source', file: { path: 'notes/test.md' } };
-      app.workspace.getActiveViewOfType.mockReturnValue(sourceView);
+      activeView = sourceView;
 
       controller.start();
       jest.advanceTimersByTime(250);
 
       const previewAnchorNode = {};
       readingView.file.path = 'notes/test.md';
-      app.workspace.getActiveViewOfType.mockReturnValue(readingView);
+      activeView = readingView;
       (global as any).document = {
         activeElement: null,
         getSelection: jest.fn().mockReturnValue(
@@ -586,6 +655,164 @@ describe('SelectionController', () => {
       });
       expect(showSelectionHighlight).not.toHaveBeenCalled();
     });
+  });
+
+  describe('PDF file views', () => {
+    let pdfView: any;
+    let pdfContainerEl: any;
+
+    beforeEach(() => {
+      pdfContainerEl = {
+        contains: jest.fn().mockReturnValue(true),
+      };
+      pdfView = {
+        getViewType: () => 'pdf',
+        file: { path: 'papers/research.pdf' },
+        containerEl: pdfContainerEl,
+      };
+      activeView = pdfView;
+    });
+
+    it('captures selected text inside a PDF view container', () => {
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('pdf selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(true);
+      expect(controller.getContext()).toEqual({
+        notePath: 'papers/research.pdf',
+        mode: 'selection',
+        selectedText: 'pdf selection',
+        lineCount: 1,
+      });
+      expect(controller.getContext()).not.toHaveProperty('startLine');
+    });
+
+    it('ignores selected text outside the PDF view container', () => {
+      pdfContainerEl.contains.mockReturnValue(false);
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('outside pdf selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(false);
+    });
+
+    it('preserves PDF selection when input is focused', () => {
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('pdf selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(true);
+
+      (global as any).document.getSelection.mockReturnValue(
+        createMockDOMSelection('', null),
+      );
+      (global as any).document.activeElement = inputEl;
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(true);
+      expect(controller.getContext()?.selectedText).toBe('pdf selection');
+    });
+
+    it('preserves PDF selection when sidebar gets focus', () => {
+      const anchorNode = {};
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(
+          createMockDOMSelection('pdf selection', anchorNode),
+        ),
+      };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+      expect(controller.hasSelection()).toBe(true);
+
+      activeView = null;
+      const sidebarButton = {};
+      focusScopeEl.addContainedNode(sidebarButton);
+      (global as any).document.activeElement = sidebarButton;
+      jest.advanceTimersByTime(250);
+
+      expect(controller.hasSelection()).toBe(true);
+      expect(controller.getContext()?.selectedText).toBe('pdf selection');
+    });
+
+    it('falls back to CSS Highlight API for PDF DOM ranges when native selection is lost', () => {
+      const anchorNode = {};
+      const mockSel = createMockDOMSelection('pdf selection', anchorNode);
+      (global as any).document = {
+        activeElement: null,
+        getSelection: jest.fn().mockReturnValue(mockSel),
+      };
+      const mockHighlights = { set: jest.fn(), delete: jest.fn() };
+      (global as any).CSS = { highlights: mockHighlights };
+
+      controller.start();
+      jest.advanceTimersByTime(250);
+
+      controller.showHighlight();
+      expect(mockHighlights.set).not.toHaveBeenCalled();
+
+      const differentRange: any = {
+        startContainer: {}, startOffset: 0,
+        endContainer: {}, endOffset: 0,
+      };
+      (global as any).document.getSelection = jest.fn().mockReturnValue({
+        rangeCount: 1,
+        getRangeAt: () => differentRange,
+      });
+
+      controller.showHighlight();
+
+      expect(showSelectionHighlight).not.toHaveBeenCalled();
+      expect(mockHighlights.set).toHaveBeenCalledWith(
+        'claudian-selection',
+        expect.any(Object),
+      );
+    });
+  });
+
+  it('ignores DOM selection in non-PDF, non-Markdown file views', () => {
+    const containerEl = {
+      contains: jest.fn().mockReturnValue(true),
+    };
+    activeView = {
+      getViewType: () => 'image',
+      file: { path: 'assets/diagram.png' },
+      containerEl,
+    };
+    const anchorNode = {};
+    (global as any).document = {
+      activeElement: null,
+      getSelection: jest.fn().mockReturnValue(
+        createMockDOMSelection('image selection', anchorNode),
+      ),
+    };
+
+    controller.start();
+    jest.advanceTimersByTime(250);
+
+    expect(controller.hasSelection()).toBe(false);
   });
 
   it('keeps context row visible when canvas selection indicator is visible', () => {

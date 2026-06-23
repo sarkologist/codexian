@@ -7,7 +7,7 @@
 
 import type { App, Component } from 'obsidian';
 
-import { getVaultFileByPath } from './obsidianCompat';
+import { getVaultFileByPath, openVaultFileAtLine, openVaultFileAtRange } from './obsidianCompat';
 
 /**
  * Regex pattern to match Obsidian wikilinks in text content.
@@ -30,25 +30,53 @@ function createWikilinkPattern(): RegExp {
 interface WikilinkMatch {
   index: number;
   fullMatch: string;
-  linkPath: string;
   linkTarget: string;
   displayText: string;
+  line?: number;
+  endLine?: number;
+}
+
+interface LineSpec {
+  path: string;
+  line?: number;
+  endLine?: number;
+}
+
+/**
+ * Splits a trailing `:line` or `:start-end` reference off a link target.
+ * Vault paths cannot legally end in `:<digits>`, so this is unambiguous.
+ * A line spec never coexists with a `#heading`/`^block` subpath, so targets
+ * carrying one pass through untouched (e.g. a heading named `Sprint:2`).
+ */
+export function extractLineSpec(target: string): LineSpec {
+  if (/[#^]/.test(target)) return { path: target };
+
+  const match = target.match(/^(.*?):(\d+)(?:-(\d+))?$/);
+  if (!match) return { path: target };
+
+  return {
+    path: match[1],
+    line: Number(match[2]),
+    endLine: match[3] !== undefined ? Number(match[3]) : undefined,
+  };
 }
 
 function buildWikilinkMatch(
   fullMatch: string,
-  linkPath: string,
+  rawPath: string,
   index: number
 ): WikilinkMatch {
   const pipeIndex = fullMatch.lastIndexOf('|');
-  const displayText = pipeIndex > 0 ? fullMatch.slice(pipeIndex + 1, -2) : linkPath;
+  const displayText = pipeIndex > 0 ? fullMatch.slice(pipeIndex + 1, -2) : rawPath;
+  const { path: linkTarget, line, endLine } = extractLineSpec(extractLinkTarget(fullMatch));
 
   return {
     index,
     fullMatch,
-    linkPath,
-    linkTarget: extractLinkTarget(fullMatch),
+    linkTarget,
     displayText,
+    line,
+    endLine,
   };
 }
 
@@ -69,11 +97,12 @@ function findWikilinks(app: App, text: string): WikilinkMatch[] {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {
     const fullMatch = match[0];
-    const linkPath = match[1];
+    const rawPath = match[1];
+    const { path } = extractLineSpec(rawPath);
 
-    if (!fileExistsInVault(app, linkPath)) continue;
+    if (!fileExistsInVault(app, path)) continue;
 
-    matches.push(buildWikilinkMatch(fullMatch, linkPath, match.index));
+    matches.push(buildWikilinkMatch(fullMatch, rawPath, match.index));
   }
 
   return matches.sort((a, b) => b.index - a.index);
@@ -112,13 +141,19 @@ function extractLinkPathFromTarget(linkTarget: string): string {
 function createWikilink(
   ownerDocument: Document,
   linkTarget: string,
-  displayText: string
+  displayText: string,
+  line?: number,
+  endLine?: number
 ): HTMLElement {
   const link = ownerDocument.createElement('a');
   link.className = 'claudian-file-link internal-link';
   link.textContent = displayText;
   link.setAttribute('data-href', linkTarget);
   link.setAttribute('href', linkTarget);
+  if (line !== undefined) {
+    link.setAttribute('data-line', String(line));
+    if (endLine !== undefined) link.setAttribute('data-end-line', String(endLine));
+  }
   return link;
 }
 
@@ -139,6 +174,32 @@ function repairEmptyInternalLink(app: App, link: HTMLAnchorElement): void {
 }
 
 /**
+ * Obsidian renders `[[note.md:42]]` as an unresolved internal link whose href
+ * keeps the `:42` suffix. Rewrite it to the bare file plus line metadata so the
+ * delegated click handler can jump there, and so it stops rendering unresolved.
+ */
+function normalizeLineSuffixLink(app: App, link: HTMLAnchorElement): void {
+  if (link.dataset.line) return;
+
+  const target = link.dataset.href || link.getAttribute('href');
+  if (!target) return;
+
+  const { path, line, endLine } = extractLineSpec(target);
+  if (line === undefined || !fileExistsInVault(app, path)) return;
+
+  link.classList.add('claudian-file-link');
+  link.classList.remove('is-unresolved');
+  link.setAttribute('data-href', path);
+  link.setAttribute('href', path);
+  link.setAttribute('data-line', String(line));
+  if (endLine !== undefined) link.setAttribute('data-end-line', String(endLine));
+
+  // Obsidian sometimes renders the anchor empty (see repairEmptyInternalLink);
+  // that repair skips line links, so restore the original target as visible text.
+  if (!(link.textContent || '').trim()) link.textContent = target;
+}
+
+/**
  * Registers a delegated click handler for file links on a container.
  * Should be called once on the messages container.
  * Handles both our custom .claudian-file-link and Obsidian's .internal-link.
@@ -152,14 +213,63 @@ export function registerFileLinkHandler(
     const target = event.target as HTMLElement;
     // Handle both our links and Obsidian's internal links
     const link = target.closest('.claudian-file-link, .internal-link') as HTMLAnchorElement;
+    if (!link) return;
 
-    if (link) {
-      event.preventDefault();
-      const linkTarget = link.dataset.href || link.getAttribute('href');
-      if (linkTarget) {
-        void app.workspace.openLinkText(linkTarget, '', 'tab');
+    event.preventDefault();
+    const rawTarget = link.dataset.href || link.getAttribute('href');
+    if (!rawTarget) return;
+
+    // Prefer explicit line metadata; otherwise derive it from a trailing
+    // :line[-end] on the target. Obsidian-rendered internal links keep the
+    // suffix in their href and never receive our data attributes.
+    const { path, line, endLine } = link.dataset.line
+      ? {
+          path: rawTarget,
+          line: Number(link.dataset.line),
+          endLine: link.dataset.endLine ? Number(link.dataset.endLine) : undefined,
+        }
+      : extractLineSpec(rawTarget);
+
+    // Only jump to a line when the bare file resolves; otherwise let Obsidian
+    // handle the raw target (e.g. open/create an unresolved note) as before.
+    if (line !== undefined && Number.isFinite(line) && fileExistsInVault(app, path)) {
+      if (endLine !== undefined && Number.isFinite(endLine)) {
+        void openVaultFileAtRange(app, path, line, endLine);
+      } else {
+        void openVaultFileAtLine(app, path, line);
       }
+      return;
     }
+
+    void app.workspace.openLinkText(rawTarget, '', 'tab');
+  });
+}
+
+/**
+ * Registers a delegated click handler for clickable vault-diff lines.
+ * Clicking a line opens its file and jumps to the corresponding line.
+ * Should be called once on the messages container.
+ */
+export function registerDiffLineHandler(
+  app: App,
+  container: HTMLElement,
+  component: Component
+): void {
+  component.registerDomEvent(container, 'click', (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    const lineEl = target.closest('.claudian-diff-line-clickable') as HTMLElement | null;
+    if (!lineEl) return;
+
+    // Don't navigate while the user is selecting diff text.
+    const selection = container.win.getSelection();
+    if (selection && !selection.isCollapsed) return;
+
+    const filePath = lineEl.dataset.filePath;
+    const line = Number(lineEl.dataset.line);
+    if (!filePath || !Number.isFinite(line)) return;
+
+    event.preventDefault();
+    void openVaultFileAtLine(app, filePath, line);
   });
 }
 
@@ -167,7 +277,7 @@ function buildFragmentWithLinks(ownerDocument: Document, text: string, matches: 
   const fragment = ownerDocument.createDocumentFragment();
   let currentIndex = text.length;
 
-  for (const { index, fullMatch, linkTarget, displayText } of matches) {
+  for (const { index, fullMatch, linkTarget, displayText, line, endLine } of matches) {
     const endIndex = index + fullMatch.length;
 
     if (endIndex < currentIndex) {
@@ -177,7 +287,7 @@ function buildFragmentWithLinks(ownerDocument: Document, text: string, matches: 
       );
     }
 
-    fragment.insertBefore(createWikilink(ownerDocument, linkTarget, displayText), fragment.firstChild);
+    fragment.insertBefore(createWikilink(ownerDocument, linkTarget, displayText, line, endLine), fragment.firstChild);
     currentIndex = index;
   }
 
@@ -209,9 +319,12 @@ function processTextNode(app: App, node: Text): boolean {
 export function processFileLinks(app: App, container: HTMLElement): void {
   if (!app || !container) return;
 
-  // Repair resolved internal links that rendered as empty anchors.
+  // Repair resolved internal links that rendered as empty anchors, and rewrite
+  // links whose target carries a :line suffix (Obsidian leaves these unresolved).
   container.querySelectorAll('a.internal-link').forEach((linkEl) => {
-    repairEmptyInternalLink(app, linkEl as HTMLAnchorElement);
+    const link = linkEl as HTMLAnchorElement;
+    repairEmptyInternalLink(app, link);
+    normalizeLineSuffixLink(app, link);
   });
 
   // Wikilinks in inline code aren't rendered by Obsidian's MarkdownRenderer

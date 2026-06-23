@@ -110,10 +110,12 @@ describe('BrowserSelectionController', () => {
     expect(indicatorEl.style.display).toBe('block');
     expect(indicatorEl.textContent).toBe('1 line selected');
     expect(indicatorEl.textContent).not.toContain('source=');
-    expect(indicatorEl.getAttribute('title')).toContain('chars selected');
-    expect(indicatorEl.getAttribute('title')).toContain('source=browser:https://example.com');
-    expect(indicatorEl.getAttribute('title')).toContain('title=Surfing');
-    expect(indicatorEl.getAttribute('title')).toContain('https://example.com');
+    expect(indicatorEl.getAttribute('title')).toBeNull();
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('Selected text:\nselected web snippet');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('chars selected');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('source=browser:https://example.com');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('title=Surfing');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('https://example.com');
   });
 
   it('shows line-based indicator text for multi-line browser selection', async () => {
@@ -125,7 +127,7 @@ describe('BrowserSelectionController', () => {
     expect(indicatorEl.textContent).toBe('2 lines selected');
   });
 
-  it('clears selection when text is deselected and input is not focused', async () => {
+  it('keeps selection when text is deselected and clears it only from the indicator', async () => {
     controller.start();
     jest.advanceTimersByTime(250);
     await flushMicrotasks();
@@ -135,8 +137,34 @@ describe('BrowserSelectionController', () => {
     jest.advanceTimersByTime(250);
     await flushMicrotasks();
 
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.style.display).toBe('block');
+
+    indicatorEl.click();
+
     expect(controller.hasSelection()).toBe(false);
     expect(indicatorEl.style.display).toBe('none');
+  });
+
+  it('does not recapture the same live browser selection after indicator dismissal', async () => {
+    controller.start();
+    jest.advanceTimersByTime(250);
+    await flushMicrotasks();
+    expect(controller.hasSelection()).toBe(true);
+
+    indicatorEl.click();
+    expect(controller.hasSelection()).toBe(false);
+
+    jest.advanceTimersByTime(250);
+    await flushMicrotasks();
+    expect(controller.hasSelection()).toBe(false);
+
+    selectionText = 'different web snippet';
+    jest.advanceTimersByTime(250);
+    await flushMicrotasks();
+
+    expect(controller.hasSelection()).toBe(true);
+    expect(controller.getContext()?.selectedText).toBe('different web snippet');
   });
 
   it('keeps selection while input is focused', async () => {

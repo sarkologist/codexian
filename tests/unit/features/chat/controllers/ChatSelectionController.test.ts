@@ -96,8 +96,10 @@ describe('ChatSelectionController', () => {
     });
     expect(indicatorEl.classList.contains('claudian-hidden')).toBe(false);
     expect(indicatorEl.textContent).toBe('1 line selected in chat');
-    expect(indicatorEl.getAttribute('title')).toContain('role=assistant');
-    expect(indicatorEl.getAttribute('title')).toContain('message=assistant-1');
+    expect(indicatorEl.getAttribute('title')).toBeNull();
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('Selected text:\nselected chat text');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('role=assistant');
+    expect(indicatorEl.getAttribute('data-tooltip')).toContain('message=assistant-1');
   });
 
   it('counts multiline chat selections', () => {
@@ -191,7 +193,7 @@ describe('ChatSelectionController', () => {
     expect(controller.hasSelection()).toBe(true);
   });
 
-  it('clears selection when deselected and input is not focused', () => {
+  it('keeps selection when deselected and clears it only from the indicator', () => {
     controller.start();
     jest.advanceTimersByTime(250);
     expect(controller.hasSelection()).toBe(true);
@@ -199,8 +201,31 @@ describe('ChatSelectionController', () => {
     selection = createSelection('', null, null);
     jest.advanceTimersByTime(250);
 
+    expect(controller.hasSelection()).toBe(true);
+    expect(indicatorEl.classList.contains('claudian-hidden')).toBe(false);
+
+    indicatorEl.click();
+
     expect(controller.hasSelection()).toBe(false);
     expect(indicatorEl.classList.contains('claudian-hidden')).toBe(true);
+  });
+
+  it('does not recapture the same live chat selection after indicator dismissal', () => {
+    controller.start();
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(true);
+
+    indicatorEl.click();
+    expect(controller.hasSelection()).toBe(false);
+
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(false);
+
+    selection = createSelection('different chat text', messageTextNode);
+    jest.advanceTimersByTime(250);
+
+    expect(controller.hasSelection()).toBe(true);
+    expect(controller.getContext()?.selectedText).toBe('different chat text');
   });
 
   it('ignores selections outside the chat transcript', () => {

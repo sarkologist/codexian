@@ -1,0 +1,49 @@
+.claudian-turn-transcript {
+  margin: 8px 0;
+}
+
+.claudian-turn-transcript-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.claudian-turn-transcript-header:hover {
+  opacity: 0.85;
+}
+
+.claudian-turn-transcript-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claudian-turn-transcript.expanded .claudian-turn-transcript-label {
+  color: var(--text-normal);
+}
+
+.claudian-turn-transcript-content {
+  margin-inline-start: 7px;
+  padding: 2px 0 2px 14px;
+  border-inline-start: 2px solid var(--background-modifier-border);
+}
+
+.claudian-turn-transcript-content > .claudian-thinking-block:first-child,
+.claudian-turn-transcript-content > .claudian-tool-call:first-child,
+.claudian-turn-transcript-content > .claudian-subagent-block:first-child {
+  margin-top: 0;
+}
+
+.claudian-turn-transcript-content > .claudian-thinking-block:last-child,
+.claudian-turn-transcript-content > .claudian-tool-call:last-child,
+.claudian-turn-transcript-content > .claudian-subagent-block:last-child {
+  margin-bottom: 0;
+}

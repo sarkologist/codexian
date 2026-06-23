@@ -11,6 +11,13 @@ function countByClass(el: any, cls: string): number {
   return count;
 }
 
+/** Recursively collect elements matching a class. */
+function collectByClass(el: any, cls: string): any[] {
+  const out: any[] = el.hasClass(cls) ? [el] : [];
+  for (const child of el._children) out.push(...collectByClass(child, cls));
+  return out;
+}
+
 /** Generate N insert DiffLines. */
 function makeInsertLines(n: number): DiffLine[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -350,6 +357,67 @@ describe('DiffRenderer', () => {
 
       // All 30 insert lines rendered (not capped because not all-inserts)
       expect(countByClass(container, 'claudian-diff-insert')).toBe(30);
+    });
+
+    describe('clickable lines (filePath)', () => {
+      const mixed: DiffLine[] = [
+        { type: 'equal', text: 'ctx', oldLineNum: 5, newLineNum: 5 },
+        { type: 'delete', text: 'gone', oldLineNum: 6 },
+        { type: 'insert', text: 'added', newLineNum: 6 },
+      ];
+
+      it('tags each line with the file path, target line, and clickable class', () => {
+        const container = createMockEl();
+        renderDiffContent(container, mixed, 3, { filePath: 'notes/todo.md' });
+
+        const lines = collectByClass(container, 'claudian-diff-line');
+        expect(lines).toHaveLength(3);
+        for (const line of lines) {
+          expect(line.hasClass('claudian-diff-line-clickable')).toBe(true);
+          expect(line.dataset.filePath).toBe('notes/todo.md');
+        }
+        // equal -> newLineNum 5, delete -> nearest preceding newLineNum (5), insert -> newLineNum 6
+        expect(lines[0].dataset.line).toBe('5');
+        expect(lines[1].dataset.line).toBe('5');
+        expect(lines[2].dataset.line).toBe('6');
+      });
+
+      it('falls back to line 1 for a leading delete with no preceding new line', () => {
+        const container = createMockEl();
+        const lines: DiffLine[] = [
+          { type: 'delete', text: 'first', oldLineNum: 1 },
+          { type: 'insert', text: 'replacement', newLineNum: 1 },
+        ];
+        renderDiffContent(container, lines, 3, { filePath: 'a.md' });
+
+        const rendered = collectByClass(container, 'claudian-diff-line');
+        expect(rendered[0].dataset.line).toBe('1');
+        expect(rendered[1].dataset.line).toBe('1');
+      });
+
+      it('tags capped new-file inserts with their line numbers', () => {
+        const container = createMockEl();
+        renderDiffContent(container, makeInsertLines(100), 3, { filePath: 'new.md' });
+
+        const lines = collectByClass(container, 'claudian-diff-line');
+        expect(lines).toHaveLength(20);
+        expect(lines[0].dataset.filePath).toBe('new.md');
+        expect(lines[0].dataset.line).toBe('1');
+        expect(lines[19].dataset.line).toBe('20');
+      });
+
+      it('does not tag lines when no filePath is provided', () => {
+        const container = createMockEl();
+        renderDiffContent(container, mixed);
+
+        const lines = collectByClass(container, 'claudian-diff-line');
+        expect(lines.length).toBeGreaterThan(0);
+        for (const line of lines) {
+          expect(line.hasClass('claudian-diff-line-clickable')).toBe(false);
+          expect(line.dataset.filePath).toBeUndefined();
+          expect(line.dataset.line).toBeUndefined();
+        }
+      });
     });
   });
 });

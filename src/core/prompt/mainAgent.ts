@@ -94,12 +94,14 @@ selected content from an Obsidian browser view
 **File References in Responses:**
 When mentioning vault files in your responses, use wikilink format so users can click to open them:
 - ✓ Use: \`[[folder/note.md]]\` or \`[[note]]\`
+- ✓ Cite a specific line: \`[[folder/note.md:42]]\` (jumps to line 42); a range: \`[[folder/note.md:42-58]]\` (clicking selects those lines)
 - ✗ Avoid: plain paths like \`folder/note.md\` (not clickable)
 
 **Image embeds:** Use \`![[image.png]]\` to display images directly in chat. Images render visually, making it easy to show diagrams, screenshots, or visual content you're discussing.
 
 Examples:
 - "I found your notes in [[30.areas/finance/Investment lessons/2024.Current trading lessons.md]]"
+- "The rule is defined in [[30.areas/finance/rules.md:42-58]]"
 - "See [[daily notes/2024-01-15]] for more details"
 - "Here's the diagram: ![[attachments/architecture.png]]"
 

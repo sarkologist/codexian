@@ -36,6 +36,7 @@ jest.mock('@/utils/imageEmbed', () => ({
 jest.mock('@/utils/fileLink', () => ({
   processFileLinks: jest.fn(),
   registerFileLinkHandler: jest.fn(),
+  registerDiffLineHandler: jest.fn(),
 }));
 
 function createMockComponent() {
@@ -429,6 +430,17 @@ describe('MessageRenderer', () => {
 
     renderer.renderStoredMessage(msg);
 
+    const msgEl = messagesEl.children[0];
+    const contentEl = msgEl.children[0];
+    const transcriptEl = contentEl.children[0];
+    expect(transcriptEl.hasClass('claudian-turn-transcript')).toBe(true);
+    expect(transcriptEl.hasClass('expanded')).toBe(false);
+    expect(transcriptEl.children[0].children[0].textContent).toBe(
+      'Transcript \u00B7 1 thought \u00B7 3 tools \u00B7 2 subagents'
+    );
+    const textEl = contentEl.children.find((child: any) => child.hasClass('claudian-text-block'));
+    expect(textEl).toBeDefined();
+
     expect(renderStoredThinkingBlock).toHaveBeenCalled();
     expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'Text block');
     // TodoWrite is not rendered inline - only in bottom panel
@@ -460,6 +472,39 @@ describe('MessageRenderer', () => {
     // Only the non-empty text block should trigger renderContent
     expect(renderContentSpy).toHaveBeenCalledTimes(1);
     expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'Real content');
+  });
+
+  it('renders an assistant message that only contains a vault diff block', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+
+    const msg: ChatMessage = {
+      id: 'assistant-local',
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      contentBlocks: [{ type: 'vault_diff', diffId: 'assistant-native' } as any],
+      vaultDiffs: {
+        'assistant-native': {
+          id: 'assistant-native',
+          createdAt: 1,
+          fileCount: 1,
+          stats: { added: 1, removed: 0 },
+          files: [{
+            path: 'note.md',
+            kind: 'added',
+            mode: 'text',
+            diffLines: [{ type: 'insert', text: 'hello', newLineNum: 1 }],
+            stats: { added: 1, removed: 0 },
+          }],
+        },
+      },
+    };
+
+    renderer.renderStoredMessage(msg);
+
+    expect(messagesEl.querySelector('.claudian-vault-diff-block')).not.toBeNull();
+    expect(messagesEl.querySelector('.claudian-vault-diff-name')?.textContent).toBe('Vault changes');
   });
 
   it('does not render stored Codex write_stdin transport tools', () => {

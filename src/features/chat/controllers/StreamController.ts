@@ -54,6 +54,12 @@ import {
   updateToolCallResult,
 } from '../rendering/ToolCallRenderer';
 import {
+  createTurnTranscript,
+  finalizeTurnTranscript,
+  incrementTurnTranscriptCount,
+  type TurnTranscriptKind,
+} from '../rendering/TurnTranscriptRenderer';
+import {
   createWriteEditBlock,
   finalizeWriteEditBlock,
   updateWriteEditWithDiff,
@@ -326,10 +332,11 @@ export class StreamController {
     }
 
     // Buffer the tool call instead of rendering immediately
-    if (state.currentContentEl) {
+    const parentEl = this.ensureTurnTranscriptContent('tool');
+    if (parentEl) {
       state.pendingTools.set(chunk.id, {
         toolCall,
-        parentEl: state.currentContentEl,
+        parentEl,
       });
       this.showThinkingIndicator();
     }
@@ -366,6 +373,29 @@ export class StreamController {
     if (planPathPrefix && filePath.replace(/\\/g, '/').includes(planPathPrefix)) {
       this.deps.state.planFilePath = filePath;
     }
+  }
+
+  private ensureTurnTranscriptContent(kind?: TurnTranscriptKind): HTMLElement | null {
+    const { state } = this.deps;
+    if (!state.currentContentEl) return null;
+
+    if (!state.currentTranscriptState) {
+      state.currentTranscriptState = createTurnTranscript(state.currentContentEl, {
+        initiallyExpanded: true,
+      });
+    }
+
+    if (kind) {
+      incrementTurnTranscriptCount(state.currentTranscriptState, kind);
+    }
+
+    return state.currentTranscriptState.contentEl;
+  }
+
+  finalizeCurrentTurnTranscript(): void {
+    const { state } = this.deps;
+    finalizeTurnTranscript(state.currentTranscriptState);
+    state.currentTranscriptState = null;
   }
 
   /**
@@ -436,8 +466,6 @@ export class StreamController {
     msg: ChatMessage,
     adapter: ProviderSubagentLifecycleAdapter,
   ): void {
-    const { state } = this.deps;
-
     const toolCall: ToolCallInfo = {
       id: chunk.id,
       name: chunk.name,
@@ -451,11 +479,12 @@ export class StreamController {
     msg.contentBlocks.push({ type: 'tool_use', toolId: chunk.id });
 
     // Render as subagent block immediately
-    if (state.currentContentEl) {
+    const parentEl = this.ensureTurnTranscriptContent('subagent');
+    if (parentEl) {
       this.flushPendingTools();
       const subagentInfo = adapter.buildSubagentInfo(toolCall, msg.toolCalls);
 
-      const subagentState = createSubagentBlock(state.currentContentEl, chunk.id, {
+      const subagentState = createSubagentBlock(parentEl, chunk.id, {
         description: subagentInfo.description,
         prompt: subagentInfo.prompt,
       });
@@ -811,8 +840,10 @@ export class StreamController {
 
     this.hideThinkingIndicator();
     if (!state.currentThinkingState) {
+      const parentEl = this.ensureTurnTranscriptContent('thought');
+      if (!parentEl) return;
       state.currentThinkingState = createThinkingBlock(
-        state.currentContentEl,
+        parentEl,
         (el, md) => renderer.renderContent(el, md)
       );
     }
@@ -934,17 +965,20 @@ export class StreamController {
     chunk: { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> },
     msg: ChatMessage
   ): void {
-    const { state, subagentManager } = this.deps;
+    const { subagentManager } = this.deps;
     this.ensureTaskToolCall(msg, chunk.id, chunk.input);
 
-    const result = subagentManager.handleTaskToolUse(chunk.id, chunk.input, state.currentContentEl);
+    const parentEl = this.ensureTurnTranscriptContent();
+    const result = subagentManager.handleTaskToolUse(chunk.id, chunk.input, parentEl);
 
     switch (result.action) {
       case 'created_sync':
+        this.incrementTranscriptSubagentCount();
         this.recordSubagentInMessage(msg, result.subagentState.info, chunk.id);
         this.showThinkingIndicator();
         break;
       case 'created_async':
+        this.incrementTranscriptSubagentCount();
         this.recordSubagentInMessage(msg, result.info, chunk.id, 'async');
         this.showThinkingIndicator();
         break;
@@ -958,9 +992,11 @@ export class StreamController {
 
   /** Renders a pending Agent tool call via SubagentManager and updates message. */
   private renderPendingTaskViaManager(toolId: string, msg: ChatMessage): void {
-    const result = this.deps.subagentManager.renderPendingTask(toolId, this.deps.state.currentContentEl);
+    const parentEl = this.ensureTurnTranscriptContent();
+    const result = this.deps.subagentManager.renderPendingTask(toolId, parentEl);
     if (!result) return;
 
+    this.incrementTranscriptSubagentCount();
     if (result.mode === 'sync') {
       this.recordSubagentInMessage(msg, result.subagentState.info, toolId);
     } else {
@@ -973,15 +1009,17 @@ export class StreamController {
     chunk: { id: string; content: string; isError?: boolean; toolUseResult?: unknown },
     msg: ChatMessage
   ): void {
+    const parentEl = this.ensureTurnTranscriptContent();
     const result = this.deps.subagentManager.renderPendingTaskFromTaskResult(
       chunk.id,
       chunk.content,
       chunk.isError || false,
-      this.deps.state.currentContentEl,
+      parentEl,
       chunk.toolUseResult
     );
     if (!result) return;
 
+    this.incrementTranscriptSubagentCount();
     if (result.mode === 'sync') {
       this.recordSubagentInMessage(msg, result.subagentState.info, chunk.id);
     } else {
@@ -1010,6 +1048,12 @@ export class StreamController {
         : { type: 'subagent', subagentId: toolId }
       );
     }
+  }
+
+  private incrementTranscriptSubagentCount(): void {
+    const { state } = this.deps;
+    if (!state.currentTranscriptState) return;
+    incrementTurnTranscriptCount(state.currentTranscriptState, 'subagent');
   }
 
   private async handleSubagentChunk(
@@ -1544,6 +1588,7 @@ export class StreamController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.currentTranscriptState = null;
     this.deps.subagentManager.resetStreamingState();
     state.pendingTools.clear();
     // Reset response timer (duration already captured at this point)

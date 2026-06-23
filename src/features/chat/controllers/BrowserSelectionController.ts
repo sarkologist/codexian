@@ -2,6 +2,7 @@ import type { App, ItemView } from 'obsidian';
 
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import { updateContextRowHasContent } from './contextRowVisibility';
+import { formatSelectionPreview } from './selectionPreview';
 
 const BROWSER_SELECTION_POLL_INTERVAL = 250;
 
@@ -12,12 +13,13 @@ type BrowserLikeWebview = HTMLElement & {
 export class BrowserSelectionController {
   private app: App;
   private indicatorEl: HTMLElement;
-  private inputEl: HTMLElement;
   private contextRowEl: HTMLElement;
   private onVisibilityChange: (() => void) | null;
   private storedSelection: BrowserSelectionContext | null = null;
+  private dismissedSelectionSignature: string | null = null;
   private pollInterval: number | null = null;
   private pollInFlight = false;
+  private readonly indicatorClickHandler = () => this.dismissFromIndicator();
 
   constructor(
     app: App,
@@ -28,13 +30,13 @@ export class BrowserSelectionController {
   ) {
     this.app = app;
     this.indicatorEl = indicatorEl;
-    this.inputEl = inputEl;
     this.contextRowEl = contextRowEl;
     this.onVisibilityChange = onVisibilityChange ?? null;
   }
 
   start(): void {
     if (this.pollInterval) return;
+    this.indicatorEl.addEventListener('click', this.indicatorClickHandler);
     this.pollInterval = window.setInterval(() => {
       void this.poll();
     }, BROWSER_SELECTION_POLL_INTERVAL);
@@ -45,6 +47,7 @@ export class BrowserSelectionController {
       window.clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    this.indicatorEl.removeEventListener('click', this.indicatorClickHandler);
     this.clear();
   }
 
@@ -54,19 +57,19 @@ export class BrowserSelectionController {
     try {
       const browserView = this.getActiveBrowserView();
       if (!browserView) {
-        this.clearWhenInputIsNotFocused();
         return;
       }
 
       const selectedText = await this.extractSelectedText(browserView.containerEl);
       if (selectedText) {
         const nextContext = this.buildContext(browserView.view, browserView.viewType, browserView.containerEl, selectedText);
+        const signature = this.getSelectionSignature(nextContext);
+        if (signature === this.dismissedSelectionSignature) return;
         if (!this.isSameSelection(nextContext, this.storedSelection)) {
+          this.dismissedSelectionSignature = null;
           this.storedSelection = nextContext;
           this.updateIndicator();
         }
-      } else {
-        this.clearWhenInputIsNotFocused();
       }
     } catch {
       // Ignore transient polling errors to keep selection tracking resilient.
@@ -234,12 +237,13 @@ export class BrowserSelectionController {
       && left.url === right.url;
   }
 
-  private clearWhenInputIsNotFocused(): void {
-    if (this.inputEl.ownerDocument.activeElement === this.inputEl) return;
-    if (this.storedSelection) {
-      this.storedSelection = null;
-      this.updateIndicator();
-    }
+  private getSelectionSignature(selection: BrowserSelectionContext): string {
+    return [
+      selection.source,
+      selection.selectedText,
+      selection.title ?? '',
+      selection.url ?? '',
+    ].join('\u001f');
   }
 
   private updateIndicator(): void {
@@ -249,12 +253,12 @@ export class BrowserSelectionController {
       const lineCount = this.storedSelection.selectedText.split(/\r?\n/).length;
       const lineLabel = lineCount === 1 ? 'line' : 'lines';
       this.indicatorEl.textContent = `${lineCount} ${lineLabel} selected`;
-      this.indicatorEl.setAttribute('title', this.buildIndicatorTitle());
+      this.indicatorEl.setAttribute('data-tooltip', this.buildIndicatorTitle());
       this.indicatorEl.removeClass('claudian-hidden');
     } else {
       this.indicatorEl.addClass('claudian-hidden');
       this.indicatorEl.textContent = '';
-      this.indicatorEl.removeAttribute('title');
+      this.indicatorEl.removeAttribute('data-tooltip');
     }
     this.updateContextRowVisibility();
   }
@@ -264,7 +268,11 @@ export class BrowserSelectionController {
 
     const charCount = this.storedSelection.selectedText.length;
     const charLabel = charCount === 1 ? 'char' : 'chars';
-    const lines = [`${charCount} ${charLabel} selected`, `source=${this.storedSelection.source}`];
+    const lines = [
+      `Selected text:\n${formatSelectionPreview(this.storedSelection.selectedText)}`,
+      `${charCount} ${charLabel} selected`,
+      `source=${this.storedSelection.source}`,
+    ];
     if (this.storedSelection.title) {
       lines.push(`title=${this.storedSelection.title}`);
     }
@@ -288,7 +296,16 @@ export class BrowserSelectionController {
     return this.storedSelection !== null;
   }
 
+  private dismissFromIndicator(): void {
+    const dismissedSelectionSignature = this.storedSelection
+      ? this.getSelectionSignature(this.storedSelection)
+      : null;
+    this.clear();
+    this.dismissedSelectionSignature = dismissedSelectionSignature;
+  }
+
   clear(): void {
+    this.dismissedSelectionSignature = null;
     this.storedSelection = null;
     this.updateIndicator();
   }

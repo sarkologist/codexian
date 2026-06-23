@@ -14,6 +14,7 @@
 @import "./components/nav-sidebar.css";
 @import "./components/code.css";
 @import "./components/thinking.css";
+@import "./components/turn-transcript.css";
 @import "./components/toolcalls.css";
 @import "./components/status-panel.css";
 @import "./components/subagent.css";

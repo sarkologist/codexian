@@ -142,6 +142,15 @@
   word-break: break-all;
 }
 
+.claudian-diff-line-clickable {
+  cursor: pointer;
+}
+
+/* Inset highlight preserves the insert/delete background colors on hover. */
+.claudian-diff-line-clickable:hover {
+  box-shadow: inset 0 0 0 9999px var(--background-modifier-hover);
+}
+
 .claudian-diff-prefix {
   flex-shrink: 0;
   width: 16px;
@@ -194,4 +203,114 @@
   color: var(--text-muted);
   font-style: italic;
   padding: 8px;
+}
+
+/* Turn-level vault diff block */
+.claudian-vault-diff-block {
+  margin: 8px 0 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.claudian-vault-diff-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+
+.claudian-vault-diff-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-accent);
+  flex-shrink: 0;
+}
+
+.claudian-vault-diff-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.claudian-vault-diff-name {
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.claudian-vault-diff-summary {
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.claudian-vault-diff-stats {
+  flex-shrink: 0;
+}
+
+.claudian-vault-diff-content {
+  padding: 0;
+}
+
+.claudian-vault-diff-file {
+  margin: 8px 0;
+}
+
+.claudian-vault-diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.claudian-vault-diff-kind {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.claudian-vault-diff-kind.is-added {
+  color: var(--color-green);
+}
+
+.claudian-vault-diff-kind.is-deleted {
+  color: var(--color-red);
+}
+
+.claudian-vault-diff-path {
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.claudian-vault-diff-file-stats {
+  color: var(--text-faint);
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.claudian-vault-diff-note,
+.claudian-vault-diff-size {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.claudian-vault-diff-size {
+  color: var(--text-faint);
 }

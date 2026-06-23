@@ -1,5 +1,6 @@
 import type { ProviderConversationHistoryService } from '../../../core/providers/types';
 import type { Conversation } from '../../../core/types';
+import { attachVaultTurnDiffsToMessages } from '../../../utils/vaultTurnDiff';
 import { getOpencodeState, type OpencodeProviderState } from '../types';
 import { loadOpencodeSessionMessages } from './OpencodeHistoryStore';
 
@@ -22,6 +23,7 @@ export class OpencodeConversationHistoryService implements ProviderConversationH
       conversation.messages.length > 0
       && this.hydratedKeys.get(conversation.id) === hydrationKey
     ) {
+      attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
       return;
     }
 
@@ -32,6 +34,7 @@ export class OpencodeConversationHistoryService implements ProviderConversationH
     }
 
     conversation.messages = messages;
+    attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
     this.hydratedKeys.set(conversation.id, hydrationKey);
   }
 

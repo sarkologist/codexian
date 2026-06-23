@@ -35,6 +35,11 @@ import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
+import {
+  buildVaultTurnDiff,
+  captureVaultDiffSnapshot,
+  type VaultDiffSnapshot,
+} from '../../../utils/vaultTurnDiff';
 import { COMPLETION_DURATION_LABEL } from '../constants';
 import { type InlineAskQuestionConfig, InlineAskUserQuestion } from '../rendering/InlineAskUserQuestion';
 import { InlineExitPlanMode } from '../rendering/InlineExitPlanMode';
@@ -361,6 +366,7 @@ export class InputController {
     let wasInvalidated = false;
     let didEnqueueToSdk = false;
     let planCompleted = false;
+    let beforeVaultSnapshot: VaultDiffSnapshot | null = null;
 
     // Lazy initialization: ensure service is ready before first query
     if (this.deps.ensureServiceInitialized) {
@@ -410,6 +416,7 @@ export class InputController {
       // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
       // This prevents duplication when rebuilding context for new sessions
       const previousMessages = state.messages.slice(0, -2);
+      beforeVaultSnapshot = await captureVaultDiffSnapshot(plugin.app);
       for await (const chunk of agentService.query(preparedTurn, previousMessages)) {
         if (state.streamGeneration !== streamGeneration) {
           wasInvalidated = true;
@@ -473,11 +480,13 @@ export class InputController {
           }
         }
 
-        state.currentContentEl = null;
-
         await streamController.finalizeCurrentThinkingBlock(finalAssistantMsg);
         await streamController.finalizeCurrentTextBlock(finalAssistantMsg);
+        streamController.finalizeCurrentTurnTranscript?.();
+        state.currentContentEl = null;
         this.deps.getSubagentManager().resetStreamingState();
+
+        await this.attachVaultTurnDiff(beforeVaultSnapshot, finalAssistantMsg);
 
         // Auto-hide completed todo panel on response end
         // Panel reappears only when new TodoWrite tool is called
@@ -562,6 +571,26 @@ export class InputController {
       this.activeStreamingAssistantMessage = null;
       this.resetProviderMessageBoundaryState();
     }
+  }
+
+  private async attachVaultTurnDiff(
+    beforeSnapshot: VaultDiffSnapshot | null,
+    assistantMsg: ChatMessage,
+  ): Promise<void> {
+    const afterSnapshot = await captureVaultDiffSnapshot(this.deps.plugin.app);
+    const diffId = assistantMsg.assistantMessageId ?? assistantMsg.id;
+    const diff = buildVaultTurnDiff(beforeSnapshot, afterSnapshot, diffId);
+    if (!diff) return;
+
+    assistantMsg.vaultDiffs = {
+      ...(assistantMsg.vaultDiffs ?? {}),
+      [diffId]: diff,
+    };
+    assistantMsg.contentBlocks = assistantMsg.contentBlocks ?? [];
+    if (!assistantMsg.contentBlocks.some(block => block.type === 'vault_diff' && block.diffId === diffId)) {
+      assistantMsg.contentBlocks.push({ type: 'vault_diff', diffId });
+    }
+    this.deps.renderer.appendVaultTurnDiff(assistantMsg, diffId);
   }
 
   // ============================================
@@ -994,6 +1023,7 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.currentTranscriptState = null;
   }
 
   private resetProviderMessageBoundaryState(): void {
@@ -1035,6 +1065,7 @@ export class InputController {
       } else {
         await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
         await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
+        this.deps.streamController.finalizeCurrentTurnTranscript?.();
       }
     }
     this.deps.streamController.hideThinkingIndicator();
@@ -1082,6 +1113,7 @@ export class InputController {
     if (previousAssistant) {
       await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
       await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
+      this.deps.streamController.finalizeCurrentTurnTranscript?.();
     }
 
     const assistantMessage: ChatMessage = {
@@ -1114,6 +1146,7 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.currentTranscriptState = null;
   }
 
   // ============================================

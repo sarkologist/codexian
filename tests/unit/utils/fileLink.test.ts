@@ -1,4 +1,4 @@
-import { extractLinkTarget } from '@/utils/fileLink';
+import { extractLineSpec, extractLinkTarget } from '@/utils/fileLink';
 
 // Extract the pattern from the module for testing
 // This matches the pattern in src/utils/fileLink.ts
@@ -228,6 +228,34 @@ describe('wikilink pattern matching', () => {
 
     it('drops display text while preserving anchors', () => {
       expect(extractLinkTarget('[[note#section|Alias]]')).toBe('note#section');
+    });
+  });
+
+  describe('line spec extraction', () => {
+    it('returns the path unchanged when there is no line suffix', () => {
+      expect(extractLineSpec('folder/note.md')).toEqual({ path: 'folder/note.md' });
+    });
+
+    it('parses a single line', () => {
+      expect(extractLineSpec('folder/note.md:42')).toEqual({ path: 'folder/note.md', line: 42 });
+    });
+
+    it('parses a line range', () => {
+      expect(extractLineSpec('note.md:42-58')).toEqual({ path: 'note.md', line: 42, endLine: 58 });
+    });
+
+    it('ignores a non-numeric trailing colon', () => {
+      expect(extractLineSpec('note.md:section')).toEqual({ path: 'note.md:section' });
+    });
+
+    it('leaves heading and block anchors untouched', () => {
+      expect(extractLineSpec('note#heading')).toEqual({ path: 'note#heading' });
+      expect(extractLineSpec('note^block')).toEqual({ path: 'note^block' });
+    });
+
+    it('does not treat a colon-number inside a subpath as a line spec', () => {
+      expect(extractLineSpec('note#Sprint:2')).toEqual({ path: 'note#Sprint:2' });
+      expect(extractLineSpec('note^block:3')).toEqual({ path: 'note^block:3' });
     });
   });
 });

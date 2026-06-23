@@ -39,6 +39,7 @@ import { OPENCODE_PLAN_MODE_ID, OPENCODE_SAFE_MODE_ID } from './providers/openco
 import { buildCursorContext } from './utils/editor';
 import { revealWorkspaceLeaf } from './utils/obsidianCompat';
 import { getVaultPath } from './utils/path';
+import { attachVaultTurnDiffsToMessages } from './utils/vaultTurnDiff';
 
 function isClaudianView(value: unknown): value is ClaudianView {
   return !!value
@@ -333,6 +334,7 @@ export default class ClaudianPlugin extends Plugin {
         usage: meta.usage,
         titleGenerationStatus: meta.titleGenerationStatus,
         resumeAtMessageId: meta.resumeAtMessageId,
+        turnDiffs: meta.turnDiffs,
       };
     }).sort(
       (a, b) => (b.lastResponseAt ?? b.updatedAt) - (a.lastResponseAt ?? a.updatedAt)
@@ -594,6 +596,7 @@ export default class ClaudianPlugin extends Plugin {
     await ProviderRegistry
       .getConversationHistoryService(conversation.providerId)
       .hydrateConversationHistory(conversation, getVaultPath(this.app));
+    attachVaultTurnDiffsToMessages(conversation.messages, conversation.turnDiffs);
   }
 
   async createConversation(options?: {

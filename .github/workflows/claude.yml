@@ -1,14 +1,19 @@
 name: Claude Code
 
+# Disabled: the Claude Code GitHub App is not installed on this repo and
+# CLAUDE_CODE_OAUTH_TOKEN is unset, so @claude mentions fail OIDC auth (401).
+# Re-enable by installing github.com/apps/claude or setting the secret, then
+# restoring the triggers below.
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned]
-  pull_request_review:
-    types: [submitted]
+  workflow_dispatch:
+  # issue_comment:
+  #   types: [created]
+  # pull_request_review_comment:
+  #   types: [created]
+  # issues:
+  #   types: [opened, assigned]
+  # pull_request_review:
+  #   types: [submitted]
 
 jobs:
   claude:

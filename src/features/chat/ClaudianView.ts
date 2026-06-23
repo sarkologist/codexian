@@ -301,10 +301,7 @@ export class ClaudianView extends ItemView {
     setIcon(newBtn, 'square-pen');
     newBtn.setAttribute('aria-label', 'New conversation');
     newBtn.addEventListener('click', () => {
-      void (async () => {
-        await this.tabManager?.createNewConversation();
-        this.updateHistoryDropdown();
-      })().catch(() => new Notice('Failed to create conversation'));
+      void this.createNewConversation().catch(() => new Notice('Failed to create conversation'));
     });
 
     // History dropdown
@@ -420,6 +417,16 @@ export class ClaudianView extends ItemView {
       return;
     }
     this.updateTabBarVisibility();
+  }
+
+  async createNewConversation(): Promise<void> {
+    const tab = await this.tabManager?.createNewConversation();
+    if (!tab) {
+      const maxTabs = this.plugin.settings.maxTabs ?? 3;
+      new Notice(`Maximum ${maxTabs} tabs allowed`);
+    }
+    this.updateTabBarVisibility();
+    this.updateHistoryDropdown();
   }
 
   private updateTabBar(): void {

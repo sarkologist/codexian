@@ -1,5 +1,6 @@
 import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import { updateContextRowHasContent } from './contextRowVisibility';
+import { formatSelectionPreview } from './selectionPreview';
 
 const CHAT_SELECTION_POLL_INTERVAL = 250;
 const MESSAGE_SELECTION_GRACE_MS = 1500;
@@ -7,10 +8,10 @@ const MESSAGE_SELECTION_GRACE_MS = 1500;
 export class ChatSelectionController {
   private messagesEl: HTMLElement;
   private indicatorEl: HTMLElement;
-  private inputEl: HTMLElement;
   private contextRowEl: HTMLElement;
   private onVisibilityChange: (() => void) | null;
   private storedSelection: ChatSelectionContext | null = null;
+  private dismissedSelectionSignature: string | null = null;
   private pollInterval: number | null = null;
   private recentMessagesSelectionUntil: number | null = null;
   private readonly selectionChangeHandler = () => this.poll();
@@ -18,6 +19,7 @@ export class ChatSelectionController {
     this.recentMessagesSelectionUntil = Date.now() + MESSAGE_SELECTION_GRACE_MS;
     window.setTimeout(() => this.poll(), 0);
   };
+  private readonly indicatorClickHandler = () => this.dismissFromIndicator();
 
   constructor(
     messagesEl: HTMLElement,
@@ -28,7 +30,6 @@ export class ChatSelectionController {
   ) {
     this.messagesEl = messagesEl;
     this.indicatorEl = indicatorEl;
-    this.inputEl = inputEl;
     this.contextRowEl = contextRowEl;
     this.onVisibilityChange = onVisibilityChange ?? null;
   }
@@ -39,6 +40,7 @@ export class ChatSelectionController {
     this.messagesEl.addEventListener('pointerdown', this.messagesPointerHandler);
     this.messagesEl.addEventListener('pointerup', this.messagesPointerHandler);
     this.messagesEl.addEventListener('mouseup', this.messagesPointerHandler);
+    this.indicatorEl.addEventListener('click', this.indicatorClickHandler);
     this.pollInterval = window.setInterval(() => this.poll(), CHAT_SELECTION_POLL_INTERVAL);
     this.poll();
   }
@@ -52,6 +54,7 @@ export class ChatSelectionController {
     this.messagesEl.removeEventListener('pointerdown', this.messagesPointerHandler);
     this.messagesEl.removeEventListener('pointerup', this.messagesPointerHandler);
     this.messagesEl.removeEventListener('mouseup', this.messagesPointerHandler);
+    this.indicatorEl.removeEventListener('click', this.indicatorClickHandler);
     this.clear();
   }
 
@@ -61,14 +64,16 @@ export class ChatSelectionController {
 
     if (selectedText.trim() && this.shouldCaptureSelection(selection)) {
       const nextContext = this.buildContext(selection, selectedText);
+      const signature = this.getSelectionSignature(nextContext);
+      if (signature === this.dismissedSelectionSignature) return;
       if (!this.isSameSelection(nextContext, this.storedSelection)) {
+        this.dismissedSelectionSignature = null;
         this.storedSelection = nextContext;
         this.updateIndicator();
       }
       return;
     }
 
-    this.clearWhenInputIsNotFocused();
   }
 
   private getSelectedText(selection: Selection | null): string {
@@ -267,26 +272,18 @@ export class ChatSelectionController {
       && left.role === right.role;
   }
 
-  private clearWhenInputIsNotFocused(): void {
-    if (this.inputEl.ownerDocument.activeElement === this.inputEl) return;
-    if (this.storedSelection) {
-      this.storedSelection = null;
-      this.updateIndicator();
-    }
-  }
-
   private updateIndicator(): void {
     if (!this.indicatorEl) return;
 
     if (this.storedSelection) {
       const lineLabel = this.storedSelection.lineCount === 1 ? 'line' : 'lines';
       this.indicatorEl.textContent = `${this.storedSelection.lineCount} ${lineLabel} selected in chat`;
-      this.indicatorEl.setAttribute('title', this.buildIndicatorTitle());
+      this.indicatorEl.setAttribute('data-tooltip', this.buildIndicatorTitle());
       this.indicatorEl.removeClass('claudian-hidden');
     } else {
       this.indicatorEl.addClass('claudian-hidden');
       this.indicatorEl.textContent = '';
-      this.indicatorEl.removeAttribute('title');
+      this.indicatorEl.removeAttribute('data-tooltip');
     }
     this.updateContextRowVisibility();
   }
@@ -296,7 +293,10 @@ export class ChatSelectionController {
 
     const charCount = this.storedSelection.selectedText.length;
     const charLabel = charCount === 1 ? 'char' : 'chars';
-    const lines = [`${charCount} ${charLabel} selected from chat`];
+    const lines = [
+      `Selected text:\n${formatSelectionPreview(this.storedSelection.selectedText)}`,
+      `${charCount} ${charLabel} selected from chat`,
+    ];
     if (this.storedSelection.role) {
       lines.push(`role=${this.storedSelection.role}`);
     }
@@ -320,7 +320,25 @@ export class ChatSelectionController {
     return this.storedSelection !== null;
   }
 
+  private getSelectionSignature(selection: ChatSelectionContext): string {
+    return [
+      selection.selectedText,
+      selection.lineCount,
+      selection.messageId ?? '',
+      selection.role ?? '',
+    ].join('\u001f');
+  }
+
+  private dismissFromIndicator(): void {
+    const dismissedSelectionSignature = this.storedSelection
+      ? this.getSelectionSignature(this.storedSelection)
+      : null;
+    this.clear();
+    this.dismissedSelectionSignature = dismissedSelectionSignature;
+  }
+
   clear(): void {
+    this.dismissedSelectionSignature = null;
     this.storedSelection = null;
     this.updateIndicator();
   }

@@ -120,6 +120,7 @@ export class SessionStorage {
       enabledMcpServers: conversation.enabledMcpServers,
       usage: conversation.usage,
       resumeAtMessageId: conversation.resumeAtMessageId,
+      ...(conversation.turnDiffs ? { turnDiffs: conversation.turnDiffs } : {}),
     };
   }
 
