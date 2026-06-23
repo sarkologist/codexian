@@ -111,6 +111,17 @@ describe('obsidianCompat', () => {
       expect(editor.setSelection).toHaveBeenCalledWith({ line: 1, ch: 0 }, { line: 3, ch: 4 });
     });
 
+    it('clamps a range that starts past the end of file', async () => {
+      const file = { path: 'short.md', basename: 'short' };
+      const editor = makeEditor(['one', 'two']);
+      const view = { getMode: () => 'source', editor };
+      const { app } = makeApp(file, view);
+
+      await openVaultFileAtRange(app, 'short.md', 200, 250);
+
+      expect(editor.setSelection).toHaveBeenCalledWith({ line: 1, ch: 0 }, { line: 1, ch: 3 });
+    });
+
     it('scrolls but does not select in reading view', async () => {
       const file = { path: 'a.md', basename: 'a' };
       const editor = makeEditor(['one', 'two']);

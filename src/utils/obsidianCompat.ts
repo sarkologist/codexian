@@ -65,9 +65,11 @@ export async function openVaultFileAtRange(
   if (!view || view.getMode?.() === 'preview' || !view.editor) return;
 
   const editor = view.editor;
-  const lastIndex = Math.min(Math.max(0, lastLine - 1), editor.lineCount() - 1);
-  const from = { line: Math.max(0, firstLine - 1), ch: 0 };
-  const to = { line: lastIndex, ch: editor.getLine(lastIndex).length };
+  const maxIndex = Math.max(0, editor.lineCount() - 1);
+  const fromIndex = Math.min(Math.max(0, firstLine - 1), maxIndex);
+  const toIndex = Math.min(Math.max(0, lastLine - 1), maxIndex);
+  const from = { line: fromIndex, ch: 0 };
+  const to = { line: toIndex, ch: editor.getLine(toIndex).length };
   editor.setSelection(from, to);
   editor.scrollIntoView({ from, to }, true);
 }

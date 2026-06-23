@@ -45,10 +45,12 @@ interface LineSpec {
 /**
  * Splits a trailing `:line` or `:start-end` reference off a link target.
  * Vault paths cannot legally end in `:<digits>`, so this is unambiguous.
- * Targets without a numeric suffix (including `#heading`/`^block` anchors)
- * pass through unchanged.
+ * A line spec never coexists with a `#heading`/`^block` subpath, so targets
+ * carrying one pass through untouched (e.g. a heading named `Sprint:2`).
  */
 export function extractLineSpec(target: string): LineSpec {
+  if (/[#^]/.test(target)) return { path: target };
+
   const match = target.match(/^(.*?):(\d+)(?:-(\d+))?$/);
   if (!match) return { path: target };
 
@@ -172,6 +174,32 @@ function repairEmptyInternalLink(app: App, link: HTMLAnchorElement): void {
 }
 
 /**
+ * Obsidian renders `[[note.md:42]]` as an unresolved internal link whose href
+ * keeps the `:42` suffix. Rewrite it to the bare file plus line metadata so the
+ * delegated click handler can jump there, and so it stops rendering unresolved.
+ */
+function normalizeLineSuffixLink(app: App, link: HTMLAnchorElement): void {
+  if (link.dataset.line) return;
+
+  const target = link.dataset.href || link.getAttribute('href');
+  if (!target) return;
+
+  const { path, line, endLine } = extractLineSpec(target);
+  if (line === undefined || !fileExistsInVault(app, path)) return;
+
+  link.classList.add('claudian-file-link');
+  link.classList.remove('is-unresolved');
+  link.setAttribute('data-href', path);
+  link.setAttribute('href', path);
+  link.setAttribute('data-line', String(line));
+  if (endLine !== undefined) link.setAttribute('data-end-line', String(endLine));
+
+  // Obsidian sometimes renders the anchor empty (see repairEmptyInternalLink);
+  // that repair skips line links, so restore the original target as visible text.
+  if (!(link.textContent || '').trim()) link.textContent = target;
+}
+
+/**
  * Registers a delegated click handler for file links on a container.
  * Should be called once on the messages container.
  * Handles both our custom .claudian-file-link and Obsidian's .internal-link.
@@ -188,21 +216,32 @@ export function registerFileLinkHandler(
     if (!link) return;
 
     event.preventDefault();
-    const linkTarget = link.dataset.href || link.getAttribute('href');
-    if (!linkTarget) return;
+    const rawTarget = link.dataset.href || link.getAttribute('href');
+    if (!rawTarget) return;
 
-    const line = Number(link.dataset.line);
-    if (link.dataset.line && Number.isFinite(line)) {
-      const endLine = Number(link.dataset.endLine);
-      if (link.dataset.endLine && Number.isFinite(endLine)) {
-        void openVaultFileAtRange(app, linkTarget, line, endLine);
+    // Prefer explicit line metadata; otherwise derive it from a trailing
+    // :line[-end] on the target. Obsidian-rendered internal links keep the
+    // suffix in their href and never receive our data attributes.
+    const { path, line, endLine } = link.dataset.line
+      ? {
+          path: rawTarget,
+          line: Number(link.dataset.line),
+          endLine: link.dataset.endLine ? Number(link.dataset.endLine) : undefined,
+        }
+      : extractLineSpec(rawTarget);
+
+    // Only jump to a line when the bare file resolves; otherwise let Obsidian
+    // handle the raw target (e.g. open/create an unresolved note) as before.
+    if (line !== undefined && Number.isFinite(line) && fileExistsInVault(app, path)) {
+      if (endLine !== undefined && Number.isFinite(endLine)) {
+        void openVaultFileAtRange(app, path, line, endLine);
       } else {
-        void openVaultFileAtLine(app, linkTarget, line);
+        void openVaultFileAtLine(app, path, line);
       }
       return;
     }
 
-    void app.workspace.openLinkText(linkTarget, '', 'tab');
+    void app.workspace.openLinkText(rawTarget, '', 'tab');
   });
 }
 
@@ -280,9 +319,12 @@ function processTextNode(app: App, node: Text): boolean {
 export function processFileLinks(app: App, container: HTMLElement): void {
   if (!app || !container) return;
 
-  // Repair resolved internal links that rendered as empty anchors.
+  // Repair resolved internal links that rendered as empty anchors, and rewrite
+  // links whose target carries a :line suffix (Obsidian leaves these unresolved).
   container.querySelectorAll('a.internal-link').forEach((linkEl) => {
-    repairEmptyInternalLink(app, linkEl as HTMLAnchorElement);
+    const link = linkEl as HTMLAnchorElement;
+    repairEmptyInternalLink(app, link);
+    normalizeLineSuffixLink(app, link);
   });
 
   // Wikilinks in inline code aren't rendered by Obsidian's MarkdownRenderer

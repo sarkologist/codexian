@@ -295,6 +295,60 @@ describe('processFileLinks', () => {
       expect(link).not.toBeNull();
       expect(link!.hasAttribute('data-line')).toBe(false);
     });
+
+    it('normalizes an Obsidian-rendered internal link that kept a line suffix', () => {
+      const app = createMockApp(['note.md']);
+      const container = document.createElement('div');
+      container.innerHTML =
+        '<a class="internal-link is-unresolved" href="note.md:42" data-href="note.md:42">note.md:42</a>';
+
+      processFileLinks(app, container);
+
+      const link = container.querySelector('a') as HTMLAnchorElement;
+      expect(link.getAttribute('data-line')).toBe('42');
+      expect(link.getAttribute('data-href')).toBe('note.md');
+      expect(link.getAttribute('href')).toBe('note.md');
+      expect(link.classList.contains('is-unresolved')).toBe(false);
+      expect(link.classList.contains('claudian-file-link')).toBe(true);
+    });
+
+    it('restores visible text when normalizing an empty line-suffix anchor', () => {
+      const app = createMockApp(['note.md']);
+      const container = document.createElement('div');
+      container.innerHTML = '<a class="internal-link" href="note.md:42"></a>';
+
+      processFileLinks(app, container);
+
+      const link = container.querySelector('a') as HTMLAnchorElement;
+      expect(link.textContent).toBe('note.md:42');
+      expect(link.getAttribute('data-line')).toBe('42');
+      expect(link.getAttribute('data-href')).toBe('note.md');
+    });
+
+    it('normalizes a rendered internal link with a line range', () => {
+      const app = createMockApp(['note.md']);
+      const container = document.createElement('div');
+      container.innerHTML = '<a class="internal-link" href="note.md:10-20" data-href="note.md:10-20">x</a>';
+
+      processFileLinks(app, container);
+
+      const link = container.querySelector('a') as HTMLAnchorElement;
+      expect(link.getAttribute('data-line')).toBe('10');
+      expect(link.getAttribute('data-end-line')).toBe('20');
+      expect(link.getAttribute('data-href')).toBe('note.md');
+    });
+
+    it('leaves a heading link whose anchor ends in a number as a plain link', () => {
+      const app = createMockApp(['note.md']);
+      const container = document.createElement('div');
+      container.innerHTML = '<a class="internal-link" href="note#Sprint:2" data-href="note#Sprint:2">Sprint 2</a>';
+
+      processFileLinks(app, container);
+
+      const link = container.querySelector('a') as HTMLAnchorElement;
+      expect(link.hasAttribute('data-line')).toBe(false);
+      expect(link.getAttribute('data-href')).toBe('note#Sprint:2');
+    });
   });
 
   describe('image embed exclusion', () => {

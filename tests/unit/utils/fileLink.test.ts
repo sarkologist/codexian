@@ -252,5 +252,10 @@ describe('wikilink pattern matching', () => {
       expect(extractLineSpec('note#heading')).toEqual({ path: 'note#heading' });
       expect(extractLineSpec('note^block')).toEqual({ path: 'note^block' });
     });
+
+    it('does not treat a colon-number inside a subpath as a line spec', () => {
+      expect(extractLineSpec('note#Sprint:2')).toEqual({ path: 'note#Sprint:2' });
+      expect(extractLineSpec('note^block:3')).toEqual({ path: 'note^block:3' });
+    });
   });
 });

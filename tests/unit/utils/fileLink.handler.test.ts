@@ -89,6 +89,78 @@ describe('registerFileLinkHandler', () => {
     expect(openLinkText).toHaveBeenCalledWith('notes/doc.md', '', 'tab', { eState: { line: 41 } });
   });
 
+  it('derives the line from the href when data-line is absent', () => {
+    const file = { path: 'notes/doc.md', basename: 'doc' };
+    const openLinkText = jest.fn().mockResolvedValue(undefined);
+    const app = {
+      vault: { getAbstractFileByPath: jest.fn().mockReturnValue(file) },
+      metadataCache: { getFirstLinkpathDest: jest.fn().mockReturnValue(null) },
+      workspace: { openLinkText },
+    };
+
+    const link: any = {
+      dataset: { href: 'notes/doc.md:42' },
+      getAttribute: jest.fn().mockReturnValue('notes/doc.md:42'),
+      closest: jest.fn(),
+    };
+    link.closest.mockReturnValue(link);
+
+    const event = { target: link, preventDefault: jest.fn() } as any;
+    const component = {
+      registerDomEvent: (_el: HTMLElement, _event: string, cb: (event: MouseEvent) => void) => cb(event),
+    };
+
+    registerFileLinkHandler(app as any, {} as HTMLElement, component as any);
+
+    expect(openLinkText).toHaveBeenCalledWith('notes/doc.md', '', 'tab', { eState: { line: 41 } });
+  });
+
+  it('falls back to openLinkText when a line link target does not resolve', () => {
+    const openLinkText = jest.fn();
+    const app = {
+      vault: { getAbstractFileByPath: jest.fn().mockReturnValue(null) },
+      metadataCache: { getFirstLinkpathDest: jest.fn().mockReturnValue(null) },
+      workspace: { openLinkText },
+    };
+
+    const link: any = {
+      dataset: { href: 'missing.md:42' },
+      getAttribute: jest.fn().mockReturnValue('missing.md:42'),
+      closest: jest.fn(),
+    };
+    link.closest.mockReturnValue(link);
+
+    const event = { target: link, preventDefault: jest.fn() } as any;
+    const component = {
+      registerDomEvent: (_el: HTMLElement, _event: string, cb: (event: MouseEvent) => void) => cb(event),
+    };
+
+    registerFileLinkHandler(app as any, {} as HTMLElement, component as any);
+
+    expect(openLinkText).toHaveBeenCalledWith('missing.md:42', '', 'tab');
+  });
+
+  it('opens a heading link via openLinkText rather than as a line', () => {
+    const openLinkText = jest.fn();
+    const app = { workspace: { openLinkText } };
+
+    const link: any = {
+      dataset: { href: 'note#Sprint:2' },
+      getAttribute: jest.fn().mockReturnValue('note#Sprint:2'),
+      closest: jest.fn(),
+    };
+    link.closest.mockReturnValue(link);
+
+    const event = { target: link, preventDefault: jest.fn() } as any;
+    const component = {
+      registerDomEvent: (_el: HTMLElement, _event: string, cb: (event: MouseEvent) => void) => cb(event),
+    };
+
+    registerFileLinkHandler(app as any, {} as HTMLElement, component as any);
+
+    expect(openLinkText).toHaveBeenCalledWith('note#Sprint:2', '', 'tab');
+  });
+
   it('opens and selects the range when the link carries data-end-line', async () => {
     const file = { path: 'notes/doc.md', basename: 'doc' };
     const openLinkText = jest.fn().mockResolvedValue(undefined);
