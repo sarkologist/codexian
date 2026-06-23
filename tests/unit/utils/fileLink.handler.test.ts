@@ -61,6 +61,67 @@ describe('registerFileLinkHandler', () => {
 
     expect(app.workspace.openLinkText).toHaveBeenCalledWith('note^block', '', 'tab');
   });
+
+  it('opens at the line when the link carries data-line', () => {
+    const file = { path: 'notes/doc.md', basename: 'doc' };
+    const openLinkText = jest.fn().mockResolvedValue(undefined);
+    const app = {
+      vault: { getAbstractFileByPath: jest.fn().mockReturnValue(file) },
+      metadataCache: { getFirstLinkpathDest: jest.fn().mockReturnValue(null) },
+      workspace: { openLinkText },
+    };
+
+    const link: any = {
+      dataset: { href: 'notes/doc.md', line: '42' },
+      getAttribute: jest.fn().mockReturnValue('notes/doc.md'),
+      closest: jest.fn(),
+    };
+    link.closest.mockReturnValue(link);
+
+    const event = { target: link, preventDefault: jest.fn() } as any;
+    const component = {
+      registerDomEvent: (_el: HTMLElement, _event: string, cb: (event: MouseEvent) => void) => cb(event),
+    };
+
+    registerFileLinkHandler(app as any, {} as HTMLElement, component as any);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(openLinkText).toHaveBeenCalledWith('notes/doc.md', '', 'tab', { eState: { line: 41 } });
+  });
+
+  it('opens and selects the range when the link carries data-end-line', async () => {
+    const file = { path: 'notes/doc.md', basename: 'doc' };
+    const openLinkText = jest.fn().mockResolvedValue(undefined);
+    const editor = {
+      lineCount: () => 6,
+      getLine: (i: number) => ['a', 'b', 'c', 'd', 'e', 'f'][i] ?? '',
+      setSelection: jest.fn(),
+      scrollIntoView: jest.fn(),
+    };
+    const app = {
+      vault: { getAbstractFileByPath: jest.fn().mockReturnValue(file) },
+      metadataCache: { getFirstLinkpathDest: jest.fn().mockReturnValue(null) },
+      workspace: { openLinkText, getActiveViewOfType: jest.fn().mockReturnValue({ getMode: () => 'source', editor }) },
+    };
+
+    const link: any = {
+      dataset: { href: 'notes/doc.md', line: '2', endLine: '5' },
+      getAttribute: jest.fn().mockReturnValue('notes/doc.md'),
+      closest: jest.fn(),
+    };
+    link.closest.mockReturnValue(link);
+
+    const event = { target: link, preventDefault: jest.fn() } as any;
+    const component = {
+      registerDomEvent: (_el: HTMLElement, _event: string, cb: (event: MouseEvent) => void) => cb(event),
+    };
+
+    registerFileLinkHandler(app as any, {} as HTMLElement, component as any);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(openLinkText).toHaveBeenCalledWith('notes/doc.md', '', 'tab', { eState: { line: 1 } });
+    expect(editor.setSelection).toHaveBeenCalledWith({ line: 1, ch: 0 }, { line: 4, ch: 1 });
+  });
 });
 
 describe('registerDiffLineHandler', () => {

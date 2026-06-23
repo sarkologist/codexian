@@ -7,7 +7,7 @@
 
 import type { App, Component } from 'obsidian';
 
-import { getVaultFileByPath, openVaultFileAtLine } from './obsidianCompat';
+import { getVaultFileByPath, openVaultFileAtLine, openVaultFileAtRange } from './obsidianCompat';
 
 /**
  * Regex pattern to match Obsidian wikilinks in text content.
@@ -30,25 +30,51 @@ function createWikilinkPattern(): RegExp {
 interface WikilinkMatch {
   index: number;
   fullMatch: string;
-  linkPath: string;
   linkTarget: string;
   displayText: string;
+  line?: number;
+  endLine?: number;
+}
+
+interface LineSpec {
+  path: string;
+  line?: number;
+  endLine?: number;
+}
+
+/**
+ * Splits a trailing `:line` or `:start-end` reference off a link target.
+ * Vault paths cannot legally end in `:<digits>`, so this is unambiguous.
+ * Targets without a numeric suffix (including `#heading`/`^block` anchors)
+ * pass through unchanged.
+ */
+export function extractLineSpec(target: string): LineSpec {
+  const match = target.match(/^(.*?):(\d+)(?:-(\d+))?$/);
+  if (!match) return { path: target };
+
+  return {
+    path: match[1],
+    line: Number(match[2]),
+    endLine: match[3] !== undefined ? Number(match[3]) : undefined,
+  };
 }
 
 function buildWikilinkMatch(
   fullMatch: string,
-  linkPath: string,
+  rawPath: string,
   index: number
 ): WikilinkMatch {
   const pipeIndex = fullMatch.lastIndexOf('|');
-  const displayText = pipeIndex > 0 ? fullMatch.slice(pipeIndex + 1, -2) : linkPath;
+  const displayText = pipeIndex > 0 ? fullMatch.slice(pipeIndex + 1, -2) : rawPath;
+  const { path: linkTarget, line, endLine } = extractLineSpec(extractLinkTarget(fullMatch));
 
   return {
     index,
     fullMatch,
-    linkPath,
-    linkTarget: extractLinkTarget(fullMatch),
+    linkTarget,
     displayText,
+    line,
+    endLine,
   };
 }
 
@@ -69,11 +95,12 @@ function findWikilinks(app: App, text: string): WikilinkMatch[] {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {
     const fullMatch = match[0];
-    const linkPath = match[1];
+    const rawPath = match[1];
+    const { path } = extractLineSpec(rawPath);
 
-    if (!fileExistsInVault(app, linkPath)) continue;
+    if (!fileExistsInVault(app, path)) continue;
 
-    matches.push(buildWikilinkMatch(fullMatch, linkPath, match.index));
+    matches.push(buildWikilinkMatch(fullMatch, rawPath, match.index));
   }
 
   return matches.sort((a, b) => b.index - a.index);
@@ -112,13 +139,19 @@ function extractLinkPathFromTarget(linkTarget: string): string {
 function createWikilink(
   ownerDocument: Document,
   linkTarget: string,
-  displayText: string
+  displayText: string,
+  line?: number,
+  endLine?: number
 ): HTMLElement {
   const link = ownerDocument.createElement('a');
   link.className = 'claudian-file-link internal-link';
   link.textContent = displayText;
   link.setAttribute('data-href', linkTarget);
   link.setAttribute('href', linkTarget);
+  if (line !== undefined) {
+    link.setAttribute('data-line', String(line));
+    if (endLine !== undefined) link.setAttribute('data-end-line', String(endLine));
+  }
   return link;
 }
 
@@ -152,14 +185,24 @@ export function registerFileLinkHandler(
     const target = event.target as HTMLElement;
     // Handle both our links and Obsidian's internal links
     const link = target.closest('.claudian-file-link, .internal-link') as HTMLAnchorElement;
+    if (!link) return;
 
-    if (link) {
-      event.preventDefault();
-      const linkTarget = link.dataset.href || link.getAttribute('href');
-      if (linkTarget) {
-        void app.workspace.openLinkText(linkTarget, '', 'tab');
+    event.preventDefault();
+    const linkTarget = link.dataset.href || link.getAttribute('href');
+    if (!linkTarget) return;
+
+    const line = Number(link.dataset.line);
+    if (link.dataset.line && Number.isFinite(line)) {
+      const endLine = Number(link.dataset.endLine);
+      if (link.dataset.endLine && Number.isFinite(endLine)) {
+        void openVaultFileAtRange(app, linkTarget, line, endLine);
+      } else {
+        void openVaultFileAtLine(app, linkTarget, line);
       }
+      return;
     }
+
+    void app.workspace.openLinkText(linkTarget, '', 'tab');
   });
 }
 
@@ -195,7 +238,7 @@ function buildFragmentWithLinks(ownerDocument: Document, text: string, matches: 
   const fragment = ownerDocument.createDocumentFragment();
   let currentIndex = text.length;
 
-  for (const { index, fullMatch, linkTarget, displayText } of matches) {
+  for (const { index, fullMatch, linkTarget, displayText, line, endLine } of matches) {
     const endIndex = index + fullMatch.length;
 
     if (endIndex < currentIndex) {
@@ -205,7 +248,7 @@ function buildFragmentWithLinks(ownerDocument: Document, text: string, matches: 
       );
     }
 
-    fragment.insertBefore(createWikilink(ownerDocument, linkTarget, displayText), fragment.firstChild);
+    fragment.insertBefore(createWikilink(ownerDocument, linkTarget, displayText, line, endLine), fragment.firstChild);
     currentIndex = index;
   }
 
