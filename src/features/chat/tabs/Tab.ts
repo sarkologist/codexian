@@ -1686,12 +1686,17 @@ export function setupServiceCallbacks(tab: TabData, plugin: ClaudianPlugin): voi
     );
     tab.service.setAutoTurnCallback((result: AutoTurnResult) => renderAutoTriggeredTurn(tab, result));
     tab.service.setPermissionModeSyncCallback((sdkMode) => {
+      const currentMode = getTabPermissionMode(tab, plugin);
+      // SDK `auto` backs both the explicit Auto mode and a Safe floor configured to
+      // auto. Only treat it as Auto when Auto is already active, so a Safe session is
+      // never silently rewritten to the explicit Auto toggle on session sync.
       const mode = sdkMode === 'bypassPermissions' || sdkMode === 'yolo'
         ? 'yolo'
         : sdkMode === 'plan'
         ? 'plan'
+        : sdkMode === 'auto' && currentMode === 'auto'
+        ? 'auto'
         : 'normal';
-      const currentMode = getTabPermissionMode(tab, plugin);
 
       if (currentMode !== mode) {
         // Save pre-plan mode when entering plan (for Shift+Tab toggle restore)

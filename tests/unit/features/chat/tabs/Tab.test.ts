@@ -1535,6 +1535,56 @@ describe('Tab - Service Callbacks', () => {
       expect(handleStreamChunk).not.toHaveBeenCalled();
       expect(scrollToBottom).not.toHaveBeenCalled();
     });
+
+    function setupSyncCallbackTest(permissionMode: string) {
+      const plugin = createMockPlugin();
+      plugin.settings.permissionMode = permissionMode;
+      plugin.settings.savedProviderPermissionMode = { claude: permissionMode };
+      const tab = createTab(createMockOptions({ plugin }));
+
+      // setupServiceCallbacks only wires callbacks when an input controller is present.
+      tab.controllers.inputController = {
+        handleApprovalRequest: jest.fn(),
+        dismissPendingApproval: jest.fn(),
+        handleAskUserQuestion: jest.fn(),
+        handleExitPlanMode: jest.fn(),
+      } as any;
+
+      const service = {
+        setApprovalCallback: jest.fn(),
+        setApprovalDismisser: jest.fn(),
+        setAskUserQuestionCallback: jest.fn(),
+        setExitPlanModeCallback: jest.fn(),
+        setSubagentHookProvider: jest.fn(),
+        setAutoTurnCallback: jest.fn(),
+        setPermissionModeSyncCallback: jest.fn(),
+      };
+      tab.service = service as any;
+
+      setupServiceCallbacks(tab, plugin);
+      const syncCallback = service.setPermissionModeSyncCallback.mock.calls[0][0];
+      return { tab, plugin, syncCallback };
+    }
+
+    it('does not promote a Safe session to Auto when the SDK reports auto', () => {
+      const { plugin, syncCallback } = setupSyncCallbackTest('normal');
+      plugin.saveSettings.mockClear();
+
+      syncCallback('auto');
+
+      expect(plugin.settings.permissionMode).toBe('normal');
+      expect(plugin.saveSettings).not.toHaveBeenCalled();
+    });
+
+    it('keeps an explicit Auto session on Auto when the SDK reports auto', () => {
+      const { plugin, syncCallback } = setupSyncCallbackTest('auto');
+      plugin.saveSettings.mockClear();
+
+      syncCallback('auto');
+
+      expect(plugin.settings.permissionMode).toBe('auto');
+      expect(plugin.saveSettings).not.toHaveBeenCalled();
+    });
   });
 });
 

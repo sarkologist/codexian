@@ -24,6 +24,8 @@ import {
 const CLAUDE_PERMISSION_MODE_TOGGLE: ProviderPermissionModeToggleConfig = {
   inactiveValue: 'normal',
   inactiveLabel: 'Safe',
+  intermediateValue: 'auto',
+  intermediateLabel: 'Auto',
   activeValue: 'yolo',
   activeLabel: 'YOLO',
   planValue: 'plan',

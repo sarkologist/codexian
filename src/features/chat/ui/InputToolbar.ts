@@ -440,11 +440,16 @@ export class PermissionToggle {
     } else {
       this.toggleEl.removeClass('claudian-hidden');
       this.labelEl.removeClass('plan-active');
+      this.toggleEl.removeClass('active');
+      this.toggleEl.removeClass('intermediate');
+      const intermediateValue = toggleConfig.intermediateValue;
       if (mode === toggleConfig.activeValue) {
         this.toggleEl.addClass('active');
         this.labelEl.setText(toggleConfig.activeLabel);
+      } else if (intermediateValue && mode === intermediateValue) {
+        this.toggleEl.addClass('intermediate');
+        this.labelEl.setText(toggleConfig.intermediateLabel ?? intermediateValue);
       } else {
-        this.toggleEl.removeClass('active');
         this.labelEl.setText(toggleConfig.inactiveLabel);
       }
     }
@@ -455,11 +460,20 @@ export class PermissionToggle {
     if (!toggleConfig) return;
 
     const current = this.callbacks.getSettings().permissionMode;
-    const newMode = current === toggleConfig.activeValue
-      ? toggleConfig.inactiveValue
-      : toggleConfig.activeValue;
+    const newMode = this.nextMode(toggleConfig, current);
     await this.callbacks.onPermissionModeChange(newMode);
     this.updateDisplay();
+  }
+
+  private nextMode(
+    toggleConfig: ProviderPermissionModeToggleConfig,
+    current: string,
+  ): string {
+    const cycle = toggleConfig.intermediateValue
+      ? [toggleConfig.inactiveValue, toggleConfig.intermediateValue, toggleConfig.activeValue]
+      : [toggleConfig.inactiveValue, toggleConfig.activeValue];
+    const currentIndex = cycle.indexOf(current);
+    return cycle[(currentIndex + 1) % cycle.length];
   }
 }
 

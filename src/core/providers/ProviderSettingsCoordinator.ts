@@ -298,6 +298,7 @@ export class ProviderSettingsCoordinator {
 
     const allowedPermissionModes = new Set([
       permissionToggle.inactiveValue,
+      ...(permissionToggle.intermediateValue ? [permissionToggle.intermediateValue] : []),
       permissionToggle.activeValue,
       ...(permissionToggle.planValue ? [permissionToggle.planValue] : []),
     ]);
@@ -311,14 +312,16 @@ export class ProviderSettingsCoordinator {
       allowedPermissionModes,
     );
 
+    // Fall back to the provider's safe inactive value when nothing else resolves
+    // so a mode that another provider owns (e.g. Claude's auto) never leaks into a
+    // provider whose toggle does not support it.
     const projectedPermissionMode = savedPermissionModeValue
       ?? derivedPermissionMode
       ?? (shouldPreferCurrentProjection ? currentPermissionMode : undefined)
-      ?? currentPermissionMode;
+      ?? currentPermissionMode
+      ?? permissionToggle.inactiveValue;
 
-    if (projectedPermissionMode !== undefined) {
-      settings.permissionMode = projectedPermissionMode;
-    }
+    settings.permissionMode = projectedPermissionMode;
   }
 
   /** Each provider's reconciler only processes its own conversations. */

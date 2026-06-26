@@ -46,6 +46,15 @@
   background: var(--background-modifier-hover);
 }
 
+.claudian-toggle-switch.intermediate {
+  background: rgba(var(--claudian-brand-rgb), 0.2);
+}
+
+.claudian-toggle-switch.intermediate::after {
+  transform: translateX(7px);
+  background: var(--claudian-brand);
+}
+
 .claudian-toggle-switch.active {
   background: rgba(var(--claudian-brand-rgb), 0.3);
 }
