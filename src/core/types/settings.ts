@@ -139,7 +139,6 @@ export interface ClaudianSettings {
   lastCustomModel?: string;
 
   // UI preferences
-  maxTabs: number;
   tabBarPosition: TabBarPosition;
   enableAutoScroll: boolean;
   deferMathRenderingDuringStreaming: boolean;

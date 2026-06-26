@@ -43,7 +43,6 @@
       "chooseTarget": "Bifurquer la conversation",
       "targetNewTab": "Nouvel onglet",
       "targetCurrentTab": "Onglet actuel",
-      "maxTabsReached": "Impossible de bifurquer : maximum de {count} onglets atteint",
       "notice": "Bifurqué dans un nouvel onglet",
       "noticeCurrentTab": "Bifurqué dans l'onglet actuel",
       "failed": "Échec de la bifurcation : {error}",
@@ -272,11 +271,6 @@
       "validation": {
         "noNode": "Node.js introuvable dans PATH. Installez Node.js ou vérifiez votre configuration PATH."
       }
-    },
-    "maxTabs": {
-      "name": "Maximum d'onglets de chat",
-      "desc": "Nombre maximum d'onglets de chat simultanés (3-10). Chaque onglet utilise une session Claude séparée.",
-      "warning": "Plus de 5 onglets peut affecter les performances et l'utilisation de la mémoire."
     },
     "tabBarPosition": {
       "name": "Position de la barre d'onglets",

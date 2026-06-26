@@ -225,35 +225,6 @@ export class ClaudianSettingTab extends PluginSettingTab {
           });
       });
 
-    const maxTabsSetting = new Setting(container)
-      .setName(t('settings.maxTabs.name'))
-      .setDesc(t('settings.maxTabs.desc'));
-
-    const maxTabsWarningEl = container.createDiv({
-      cls: 'claudian-max-tabs-warning claudian-setting-validation claudian-setting-validation-warning claudian-hidden',
-    });
-    maxTabsWarningEl.setText(t('settings.maxTabs.warning'));
-
-    const updateMaxTabsWarning = (value: number): void => {
-      maxTabsWarningEl.toggleClass('claudian-hidden', value <= 5);
-    };
-
-    maxTabsSetting.addSlider((slider) => {
-      slider
-        .setLimits(3, 10, 1)
-        .setValue(this.plugin.settings.maxTabs ?? 3)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.maxTabs = value;
-          await this.plugin.saveSettings();
-          updateMaxTabsWarning(value);
-          for (const view of this.plugin.getAllViews()) {
-            view.refreshTabControls();
-          }
-        });
-      updateMaxTabsWarning(this.plugin.settings.maxTabs ?? 3);
-    });
-
     new Setting(container)
       .setName(t('settings.chatViewPlacement.name'))
       .setDesc(t('settings.chatViewPlacement.desc'))

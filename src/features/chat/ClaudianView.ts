@@ -409,22 +409,12 @@ export class ClaudianView extends ItemView {
   }
 
   async createNewTab(): Promise<void> {
-    const tab = await this.tabManager?.createTab();
-    if (!tab) {
-      const maxTabs = this.plugin.settings.maxTabs ?? 3;
-      new Notice(`Maximum ${maxTabs} tabs allowed`);
-      this.updateTabBarVisibility();
-      return;
-    }
+    await this.tabManager?.createTab();
     this.updateTabBarVisibility();
   }
 
   async createNewConversation(): Promise<void> {
-    const tab = await this.tabManager?.createNewConversation();
-    if (!tab) {
-      const maxTabs = this.plugin.settings.maxTabs ?? 3;
-      new Notice(`Maximum ${maxTabs} tabs allowed`);
-    }
+    await this.tabManager?.createNewConversation();
     this.updateTabBarVisibility();
     this.updateHistoryDropdown();
   }
