@@ -3,7 +3,6 @@ import { createMockEl } from '@test/helpers/mockElement';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import { TabManager } from '@/features/chat/tabs/TabManager';
 import {
-  DEFAULT_MAX_TABS,
   type PersistedTabManagerState,
   type TabManagerCallbacks,
 } from '@/features/chat/tabs/types';
@@ -117,7 +116,6 @@ function createMockPlugin(overrides: Record<string, any> = {}): any {
       },
     },
     settings: {
-      maxTabs: DEFAULT_MAX_TABS,
       ...(overrides.settings || {}),
     },
     getConversationById: jest.fn().mockResolvedValue(null),
@@ -272,17 +270,16 @@ describe('TabManager - Tab Lifecycle', () => {
       expect(mockInitializeTabService).not.toHaveBeenCalled();
     });
 
-    it('should enforce max tabs limit', async () => {
+    it('should allow creating tabs without limit', async () => {
       const manager = createManager({ callbacks });
 
-      for (let i = 0; i < DEFAULT_MAX_TABS; i++) {
-        await manager.createTab();
+      // Create well past the old cap of 3 — every creation should succeed.
+      for (let i = 0; i < 11; i++) {
+        const tab = await manager.createTab();
+        expect(tab).not.toBeNull();
       }
 
-      const extraTab = await manager.createTab();
-
-      expect(extraTab).toBeNull();
-      expect(manager.getTabCount()).toBe(DEFAULT_MAX_TABS);
+      expect(manager.getTabCount()).toBe(11);
     });
 
     it('should use provided tab ID for restoration', async () => {
@@ -562,15 +559,13 @@ describe('TabManager - Tab Queries', () => {
   });
 
   describe('canCreateTab', () => {
-    it('should return true when under limit', () => {
+    it('should always return true (tabs are unlimited)', async () => {
       expect(manager.canCreateTab()).toBe(true);
-    });
 
-    it('should return false when at limit', async () => {
-      for (let i = 1; i < DEFAULT_MAX_TABS; i++) {
+      for (let i = 0; i < 10; i++) {
         await manager.createTab();
       }
-      expect(manager.canCreateTab()).toBe(false);
+      expect(manager.canCreateTab()).toBe(true);
     });
   });
 });
@@ -747,23 +742,6 @@ describe('TabManager - Conversation Management', () => {
       expect(result).not.toBe(activeTab);
       expect(result!.conversationId).toBeNull();
       expect(manager.getActiveTab()).toBe(result);
-      expect(activeTab!.state.isStreaming).toBe(true);
-    });
-
-    it('should not interrupt a streaming tab when max tabs is reached', async () => {
-      plugin.settings.maxTabs = 3;
-      await manager.createTab();
-      await manager.createTab();
-      const activeTab = manager.getActiveTab();
-      const createNew = jest.fn().mockResolvedValue(undefined);
-      activeTab!.state.isStreaming = true;
-      activeTab!.controllers.conversationController = { createNew } as any;
-
-      const result = await manager.createNewConversation();
-
-      expect(result).toBeNull();
-      expect(createNew).not.toHaveBeenCalled();
-      expect(manager.getActiveTab()).toBe(activeTab);
       expect(activeTab!.state.isStreaming).toBe(true);
     });
   });
@@ -2068,22 +2046,19 @@ describe('TabManager - openConversation Current Tab Path', () => {
     expect(activeTab!.conversationId).toBeNull();
   });
 
-  it('should not open in current tab if at max tabs and preferNewTab is true', async () => {
-    for (let i = 0; i < DEFAULT_MAX_TABS - 1; i++) {
-      await manager.createTab();
-    }
-    expect(manager.getTabCount()).toBe(DEFAULT_MAX_TABS);
-
+  it('should open in a new tab when preferNewTab is true (tabs are unlimited)', async () => {
     const activeTab = manager.getActiveTab();
     const switchTo = jest.fn().mockResolvedValue(undefined);
     activeTab!.controllers.conversationController = { switchTo } as any;
+    const initialCount = manager.getTabCount();
 
-    plugin.getConversationById.mockResolvedValue({ id: 'conv-max' });
+    plugin.getConversationById.mockResolvedValue({ id: 'conv-new-tab' });
 
-    // preferNewTab=true but at max, so should open in current tab
-    await manager.openConversation('conv-max', true);
+    await manager.openConversation('conv-new-tab', true);
 
-    expect(switchTo).toHaveBeenCalledWith('conv-max');
+    // A new tab is created instead of switching the current tab's conversation.
+    expect(manager.getTabCount()).toBe(initialCount + 1);
+    expect(switchTo).not.toHaveBeenCalled();
   });
 });
 
@@ -2339,7 +2314,6 @@ describe('TabManager - forkInCurrentTab', () => {
     const plugin = createMockPlugin({
       createConversation: mockCreateConversation,
       updateConversation: mockUpdateConversation,
-      settings: { maxTabs: 3 },
     });
 
     let tabCounter = 0;
@@ -2365,12 +2339,11 @@ describe('TabManager - forkInCurrentTab', () => {
       createMockView()
     );
 
-    // Fill all tabs to max
     await manager.createTab();
     await manager.createTab();
     await manager.createTab();
 
-    // forkInCurrentTab should still work even at max tabs
+    // forkInCurrentTab reuses the current tab, so it never depends on tab count.
     const success = await manager.forkInCurrentTab({
       messages: [{ id: 'msg-1', role: 'user', content: 'hello', timestamp: 1 }] as any,
       sourceSessionId: 'session-1',
@@ -2462,7 +2435,6 @@ describe('TabManager - switchToTab Session Sync', () => {
 
     const plugin = createMockPlugin({
       settings: {
-        maxTabs: DEFAULT_MAX_TABS,
         persistentExternalContextPaths: ['/persistent/path'],
       },
     });
@@ -2746,44 +2718,6 @@ describe('TabManager - handleForkRequest (modal dispatch)', () => {
 
     expect(mockChooseForkTarget).toHaveBeenCalled();
     expect(mockCreateConversation).not.toHaveBeenCalled();
-  });
-});
-
-describe('TabManager - forkToNewTab at max tabs', () => {
-  it('should return null when at max tabs', async () => {
-    jest.clearAllMocks();
-
-    const plugin = createMockPlugin();
-    // MIN_TABS is 3, so maxTabs must be >= 3 to avoid clamping
-    plugin.settings.maxTabs = 3;
-    plugin.createConversation = jest.fn().mockResolvedValue({ id: 'fork-conv', providerId: 'claude' });
-    plugin.updateConversation = jest.fn().mockResolvedValue(undefined);
-
-    let tabCounter = 0;
-    mockCreateTab.mockImplementation(() => {
-      tabCounter++;
-      return createMockTabData({ id: `tab-${tabCounter}` });
-    });
-
-    const manager = new TabManager(
-      plugin,
-      createMockMcpManager(),
-      createMockEl(),
-      createMockView()
-    );
-
-    await manager.createTab();
-    await manager.createTab();
-    await manager.createTab();
-    expect(manager.getTabCount()).toBe(3);
-
-    const result = await manager.forkToNewTab({
-      messages: [],
-      sourceSessionId: 'session-1',
-      resumeAt: 'asst-uuid',
-    });
-
-    expect(result).toBeNull();
   });
 });
 

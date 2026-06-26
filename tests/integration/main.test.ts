@@ -565,12 +565,12 @@ describe('ClaudianPlugin', () => {
       expect(createNewTab).toHaveBeenCalledTimes(1);
     });
 
-    it('stays unavailable when the open view is already at the tab limit', async () => {
+    it('stays available when the open view has a tab manager (tabs are unlimited)', async () => {
       await plugin.onload();
 
       const mockView = {
         getTabManager: jest.fn().mockReturnValue({
-          canCreateTab: jest.fn().mockReturnValue(false),
+          canCreateTab: jest.fn().mockReturnValue(true),
         }),
       };
 
@@ -578,7 +578,7 @@ describe('ClaudianPlugin', () => {
 
       const command = getRegisteredCommand('new-tab');
 
-      expect(command.checkCallback(true)).toBe(false);
+      expect(command.checkCallback(true)).toBe(true);
     });
 
     it('keeps tab commands unavailable while a Claudian leaf view is not initialized', async () => {
@@ -594,7 +594,7 @@ describe('ClaudianPlugin', () => {
       }
     });
 
-    it('stays unavailable when reopening the persisted layout would already hit the tab limit', async () => {
+    it('stays available when reopening a persisted layout with several tabs (tabs are unlimited)', async () => {
       (plugin.loadData as jest.Mock).mockResolvedValue({
         tabManagerState: {
           openTabs: [
@@ -612,7 +612,7 @@ describe('ClaudianPlugin', () => {
 
       const command = getRegisteredCommand('new-tab');
 
-      expect(command.checkCallback(true)).toBe(false);
+      expect(command.checkCallback(true)).toBe(true);
     });
   });
 

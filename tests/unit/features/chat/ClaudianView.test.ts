@@ -38,7 +38,7 @@ describe('ClaudianView tab controls', () => {
     (Notice as jest.Mock).mockClear();
   });
 
-  it('hides the new-tab button when the tab manager is at capacity', () => {
+  it('hides the new-tab button when tab creation is unavailable', () => {
     const { newTabButtonEl, view } = createViewHarness({ canCreateTab: false });
 
     view.refreshTabControls();
@@ -59,20 +59,6 @@ describe('ClaudianView tab controls', () => {
     expect(newTabButtonEl.hasClass('claudian-hidden')).toBe(false);
     expect(newTabButtonEl.getAttribute('aria-disabled')).toBeNull();
     expect(newTabButtonEl.getAttribute('aria-hidden')).toBeNull();
-  });
-
-  it('shows the max-tabs notice when new conversation cannot create a tab', async () => {
-    const { view } = createViewHarness({ canCreateTab: false });
-    view.plugin.settings.maxTabs = 1;
-    view.tabManager.createNewConversation = jest.fn().mockResolvedValue(null);
-    view.updateTabBarVisibility = jest.fn();
-    view.updateHistoryDropdown = jest.fn();
-
-    await view.createNewConversation();
-
-    expect(Notice).toHaveBeenCalledWith('Maximum 1 tabs allowed');
-    expect(view.updateTabBarVisibility).toHaveBeenCalled();
-    expect(view.updateHistoryDropdown).toHaveBeenCalled();
   });
 });
 

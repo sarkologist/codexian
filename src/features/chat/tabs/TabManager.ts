@@ -29,9 +29,6 @@ import {
   wireTabInputEvents,
 } from './Tab';
 import {
-  DEFAULT_MAX_TABS,
-  MAX_TABS,
-  MIN_TABS,
   type PersistedTabManagerState,
   type PersistedTabState,
   type TabBarItem,
@@ -98,15 +95,6 @@ export class TabManager implements TabManagerInterface {
   /** Guard to prevent concurrent tab switches. */
   private isSwitchingTab = false;
 
-  /**
-   * Gets the current max tabs limit from settings.
-   * Clamps to MIN_TABS and MAX_TABS bounds.
-   */
-  private getMaxTabs(): number {
-    const settingsValue = this.plugin.settings.maxTabs ?? DEFAULT_MAX_TABS;
-    return Math.max(MIN_TABS, Math.min(MAX_TABS, settingsValue));
-  }
-
   constructor(
     plugin: ClaudianPlugin,
     containerEl: HTMLElement,
@@ -150,18 +138,13 @@ export class TabManager implements TabManagerInterface {
    * @param conversationId Optional conversation to load into the tab.
    * @param tabId Optional tab ID (for restoration).
    * @param options Controls whether the new tab becomes active immediately.
-   * @returns The created tab, or null if max tabs reached.
+   * @returns The created tab.
    */
   async createTab(
     conversationId?: string | null,
     tabId?: TabId,
     options: CreateTabOptions = {},
-  ): Promise<TabData | null> {
-    const maxTabs = this.getMaxTabs();
-    if (this.tabs.size >= maxTabs) {
-      return null;
-    }
-
+  ): Promise<TabData> {
     const { activate = true, draftModel } = options;
 
     const conversation = conversationId
@@ -383,9 +366,9 @@ export class TabManager implements TabManagerInterface {
     return this.tabs.size;
   }
 
-  /** Checks if more tabs can be created. */
+  /** Checks if more tabs can be created. Tabs are unlimited. */
   canCreateTab(): boolean {
-    return this.tabs.size < this.getMaxTabs();
+    return true;
   }
 
   // ============================================
@@ -470,7 +453,7 @@ export class TabManager implements TabManagerInterface {
   /**
    * Creates a new conversation in the active tab.
    */
-  async createNewConversation(): Promise<TabData | null> {
+  async createNewConversation(): Promise<TabData> {
     const activeTab = this.getActiveTab();
     if (!activeTab) {
       return await this.createTab();
@@ -526,12 +509,7 @@ export class TabManager implements TabManagerInterface {
     if (!target) return;
 
     if (target === 'new-tab') {
-      const tab = await this.forkToNewTab(context);
-      if (!tab) {
-        const maxTabs = this.getMaxTabs();
-        new Notice(t('chat.fork.maxTabsReached', { count: String(maxTabs) }));
-        return;
-      }
+      await this.forkToNewTab(context);
       new Notice(t('chat.fork.notice'));
     } else {
       const success = await this.forkInCurrentTab(context);
@@ -543,12 +521,7 @@ export class TabManager implements TabManagerInterface {
     }
   }
 
-  async forkToNewTab(context: ForkContext): Promise<TabData | null> {
-    const maxTabs = this.getMaxTabs();
-    if (this.tabs.size >= maxTabs) {
-      return null;
-    }
-
+  async forkToNewTab(context: ForkContext): Promise<TabData> {
     const conversationId = await this.createForkConversation(context);
     try {
       return await this.createTab(conversationId);

@@ -238,7 +238,7 @@ export default class ClaudianPlugin extends Plugin {
       return false;
     }
 
-    return this.getLastKnownOpenTabCount() < this.getMaxTabsLimit();
+    return true;
   }
 
   private async ensureViewOpen(): Promise<ClaudianView | null> {
@@ -761,11 +761,6 @@ export default class ClaudianPlugin extends Plugin {
 
   private getLastKnownOpenTabCount(): number {
     return this.lastKnownTabManagerState?.openTabs.length ?? 0;
-  }
-
-  private getMaxTabsLimit(): number {
-    const maxTabs = this.settings.maxTabs ?? 3;
-    return Math.max(3, Math.min(10, maxTabs));
   }
 
 }
