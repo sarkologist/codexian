@@ -375,6 +375,59 @@ describe('ProviderSettingsCoordinator', () => {
       expect(settings.serviceTier).toBe('fast');
     });
 
+    it('does not leak the Claude auto permission mode into a provider that lacks it', () => {
+      const settings: Record<string, unknown> = {
+        settingsProvider: 'claude',
+        permissionMode: 'auto',
+        providerConfigs: {
+          codex: {
+            enabled: true,
+            environmentVariables: '',
+          },
+        },
+        model: 'haiku',
+        effortLevel: 'high',
+        serviceTier: 'default',
+        thinkingBudget: 'off',
+        savedProviderModel: {},
+        savedProviderEffort: {},
+        savedProviderServiceTier: {},
+        savedProviderThinkingBudget: {},
+        savedProviderPermissionMode: {},
+      };
+
+      ProviderSettingsCoordinator.projectProviderState(settings, 'codex');
+
+      expect(settings.permissionMode).not.toBe('auto');
+      expect(settings.permissionMode).toBe('normal');
+    });
+
+    it('preserves the Claude auto permission mode when projecting saved provider state', () => {
+      const settings: Record<string, unknown> = {
+        settingsProvider: 'codex',
+        permissionMode: 'normal',
+        providerConfigs: {
+          claude: {
+            enabled: true,
+            environmentVariables: '',
+          },
+        },
+        model: 'haiku',
+        effortLevel: 'high',
+        serviceTier: 'default',
+        thinkingBudget: 'off',
+        savedProviderModel: {},
+        savedProviderEffort: {},
+        savedProviderServiceTier: {},
+        savedProviderThinkingBudget: {},
+        savedProviderPermissionMode: { claude: 'auto' },
+      };
+
+      ProviderSettingsCoordinator.projectProviderState(settings, 'claude');
+
+      expect(settings.permissionMode).toBe('auto');
+    });
+
     it('derives OpenCode permission mode from the managed selected mode when no provider snapshot exists yet', () => {
       const settings: Record<string, unknown> = {
         settingsProvider: 'claude',

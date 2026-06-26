@@ -118,6 +118,8 @@ function createMockUIConfig() {
     getPermissionModeToggle: jest.fn().mockReturnValue({
       inactiveValue: 'normal',
       inactiveLabel: 'Safe',
+      intermediateValue: 'auto',
+      intermediateLabel: 'Auto',
       activeValue: 'yolo',
       activeLabel: 'YOLO',
       planValue: 'plan',
@@ -639,13 +641,45 @@ describe('PermissionToggle', () => {
     expect(toggle?.hasClass('active')).toBe(false);
   });
 
-  it('should toggle from normal to yolo on click', async () => {
+  it('should display Auto label and intermediate class in auto mode', () => {
+    callbacks.getSettings.mockReturnValue({
+      model: 'sonnet',
+      thinkingBudget: 'low',
+      serviceTier: 'default',
+      permissionMode: 'auto',
+    });
+    const parentEl2 = createMockEl();
+    new PermissionToggle(parentEl2, callbacks);
+
+    const label = parentEl2.querySelector('.claudian-permission-label');
+    expect(label?.textContent).toBe('Auto');
+
+    const toggle = parentEl2.querySelector('.claudian-toggle-switch');
+    expect(toggle?.hasClass('intermediate')).toBe(true);
+    expect(toggle?.hasClass('active')).toBe(false);
+  });
+
+  it('should cycle from normal to auto on click', async () => {
     const toggle = parentEl.querySelector('.claudian-toggle-switch');
+    await toggle?.dispatchEvent('click');
+    expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('auto');
+  });
+
+  it('should cycle from auto to yolo on click', async () => {
+    callbacks.getSettings.mockReturnValue({
+      model: 'sonnet',
+      thinkingBudget: 'low',
+      permissionMode: 'auto',
+    });
+    const parentEl2 = createMockEl();
+    new PermissionToggle(parentEl2, callbacks);
+
+    const toggle = parentEl2.querySelector('.claudian-toggle-switch');
     await toggle?.dispatchEvent('click');
     expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('yolo');
   });
 
-  it('should toggle from yolo to normal on click', async () => {
+  it('should cycle from yolo back to normal on click', async () => {
     callbacks.getSettings.mockReturnValue({
       model: 'sonnet',
       thinkingBudget: 'low',

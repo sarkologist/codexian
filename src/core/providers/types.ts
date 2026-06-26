@@ -214,6 +214,9 @@ export interface ProviderReasoningOption extends ProviderUIOption {
 export interface ProviderPermissionModeToggleConfig {
   inactiveValue: string;
   inactiveLabel: string;
+  /** Optional middle step inserted between inactive and active when cycling. */
+  intermediateValue?: string;
+  intermediateLabel?: string;
   activeValue: string;
   activeLabel: string;
   planValue?: string;

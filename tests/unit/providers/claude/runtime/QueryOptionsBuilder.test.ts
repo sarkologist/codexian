@@ -245,6 +245,17 @@ describe('QueryOptionsBuilder', () => {
       expect(config.enableAutoMode).toBe(true);
     });
 
+    it('resolves the auto permission mode to the SDK auto mode', () => {
+      const ctx = createMockContext({
+        settings: createMockSettings({ permissionMode: 'auto', claudeSafeMode: 'acceptEdits' }),
+      });
+      const config = QueryOptionsBuilder.buildPersistentQueryConfig(ctx);
+
+      expect(config.permissionMode).toBe('auto');
+      expect(config.sdkPermissionMode).toBe('auto');
+      expect(config.enableAutoMode).toBe(true);
+    });
+
     it('includes thinking tokens when budget is set', () => {
       const ctx = createMockContext({
         settings: createMockSettings({ model: 'custom-model', thinkingBudget: 'high' }),
@@ -395,6 +406,21 @@ describe('QueryOptionsBuilder', () => {
       const options = QueryOptionsBuilder.buildPersistentQueryOptions(ctx);
 
       expect(options.permissionMode).toBe('bypassPermissions');
+      expect(options.extraArgs).toEqual({ 'enable-auto-mode': null });
+    });
+
+    it('resolves the auto permission mode to SDK auto with the opt-in flag', () => {
+      const ctx = {
+        ...createMockContext({
+          settings: createMockSettings({ permissionMode: 'auto', claudeSafeMode: 'acceptEdits' }),
+        }),
+        abortController: new AbortController(),
+        hooks: {},
+      };
+      const options = QueryOptionsBuilder.buildPersistentQueryOptions(ctx);
+
+      expect(options.permissionMode).toBe('auto');
+      expect(options.allowDangerouslySkipPermissions).toBe(true);
       expect(options.extraArgs).toEqual({ 'enable-auto-mode': null });
     });
 

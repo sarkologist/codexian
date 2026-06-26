@@ -131,7 +131,10 @@ export class QueryOptionsBuilder {
       settingSources: settingSources.join(','),
       claudeCliPath: ctx.cliPath,
       enableChrome: claudeSettings.enableChrome,
-      enableAutoMode: claudeSettings.safeMode === 'auto',
+      enableAutoMode: QueryOptionsBuilder.resolveEnableAutoMode(
+        ctx.settings.permissionMode,
+        claudeSettings.safeMode,
+      ),
     };
   }
 
@@ -230,7 +233,20 @@ export class QueryOptionsBuilder {
   ): SDKPermissionMode {
     if (permissionMode === 'yolo') return 'bypassPermissions';
     if (permissionMode === 'plan') return 'plan';
+    if (permissionMode === 'auto') return 'auto';
     return claudeSafeMode;
+  }
+
+  /**
+   * Whether the auto-mode startup opt-in flag is needed. Enabled when auto is the
+   * active mode or the configured Safe floor, so toggling into auto is restart-free
+   * once the capability is present.
+   */
+  private static resolveEnableAutoMode(
+    permissionMode: PermissionMode,
+    claudeSafeMode: ClaudeSafeMode,
+  ): boolean {
+    return permissionMode === 'auto' || claudeSafeMode === 'auto';
   }
 
   private static applyPermissionMode(
@@ -253,9 +269,9 @@ export class QueryOptionsBuilder {
 
   private static applyExtraArgs(
     options: Options,
-    settings: { enableChrome: boolean; safeMode: ClaudeSafeMode },
+    settings: { enableChrome: boolean; enableAutoMode: boolean },
   ): void {
-    if (settings.safeMode === 'auto') {
+    if (settings.enableAutoMode) {
       options.extraArgs = { ...options.extraArgs, 'enable-auto-mode': null };
     }
 
@@ -291,7 +307,13 @@ export class QueryOptionsBuilder {
       includePartialMessages: true,
     };
 
-    QueryOptionsBuilder.applyExtraArgs(options, claudeSettings);
+    QueryOptionsBuilder.applyExtraArgs(options, {
+      enableChrome: claudeSettings.enableChrome,
+      enableAutoMode: QueryOptionsBuilder.resolveEnableAutoMode(
+        ctx.settings.permissionMode,
+        claudeSettings.safeMode,
+      ),
+    });
     options.spawnClaudeCodeProcess = createCustomSpawnFunction(ctx.enhancedPath);
 
     return { options, claudeSettings };
