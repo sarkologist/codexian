@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import type { ChatMessage, ContentBlock, ToolCallInfo } from '../../../core/types';
+import { parseCodexMessageSelectionContext } from '../../../utils/selectionContext';
 import {
   isCodexToolOutputError,
   normalizeCodexMcpToolInput,
@@ -393,7 +394,7 @@ const CODEX_SYSTEM_MESSAGE_PREFIXES = [
   '<skill>',
 ];
 
-const CODEX_BRACKET_CONTEXT_PATTERN = /\n\[(?:Current note|Editor selection from|Browser selection from|Canvas selection from)\b/;
+const CODEX_BRACKET_CONTEXT_PATTERN = /\n\[(?:Current note|Editor selection from|Browser selection from|Chat selection from|Canvas selection from)\b/;
 
 function isCodexSystemMessage(text: string): boolean {
   const trimmed = text.trimStart();
@@ -1079,11 +1080,13 @@ function flushBubbleTurnMessages(
   const userText = turn.userChunks.join('\n').trim();
   if (userText && !isCodexSystemMessage(userText)) {
     const displayContent = extractCodexDisplayContent(userText);
+    const selectionContext = parseCodexMessageSelectionContext(userText);
     messages.push({
       id: `codex-msg-${msgIndex}`,
       role: 'user',
       content: userText,
       ...(displayContent !== undefined ? { displayContent } : {}),
+      ...(selectionContext ? { selectionContext } : {}),
       ...(turn.serverTurnId ? { userMessageId: turn.serverTurnId } : {}),
       timestamp: turn.userTimestamp || turn.startedAt || Date.now(),
     });

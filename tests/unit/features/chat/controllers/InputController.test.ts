@@ -477,6 +477,50 @@ describe('InputController - Message Queue', () => {
         jest.useRealTimers();
       }
     });
+
+    it('should preserve queued selection context on the sent user message', async () => {
+      jest.useFakeTimers();
+      try {
+        const editorContext = {
+          notePath: 'notes/queued.md',
+          mode: 'selection' as const,
+          selectedText: 'queued selection',
+          lineCount: 1,
+        };
+        deps = createSendableDeps();
+        ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
+          createMockStream([{ type: 'done' }])
+        );
+        deps.state.queuedMessage = {
+          content: 'queued content',
+          images: undefined,
+          editorContext,
+          canvasContext: null,
+          turnRequest: {
+            text: 'queued content',
+            editorSelection: editorContext,
+          },
+        };
+        controller = new InputController(deps);
+
+        (controller as any).processQueuedMessage();
+        jest.runAllTimers();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(deps.state.messages[0]).toMatchObject({
+          role: 'user',
+          displayContent: 'queued content',
+          selectionContext: {
+            editor: editorContext,
+          },
+        });
+        expect(deps.state.messages[0].content).toContain('queued content');
+        expect(deps.state.messages[0].content).toContain('<editor_selection path="notes/queued.md">');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('Queue indicator UI', () => {
@@ -854,7 +898,12 @@ describe('InputController - Message Queue', () => {
       deps.state.queuedMessage = {
         content: 'steer prompt',
         images: undefined,
-        editorContext: null,
+        editorContext: {
+          notePath: 'notes/steer.md',
+          mode: 'selection',
+          selectedText: 'selected steer text',
+          lineCount: 1,
+        },
         browserContext: null,
         canvasContext: null,
       };
@@ -880,6 +929,14 @@ describe('InputController - Message Queue', () => {
         content: 'persisted steer prompt',
         displayContent: 'steer prompt',
         currentNote: 'notes/steer.md',
+        selectionContext: {
+          editor: {
+            notePath: 'notes/steer.md',
+            mode: 'selection',
+            selectedText: 'selected steer text',
+            lineCount: 1,
+          },
+        },
       });
       expect(secondAssistant).toMatchObject({
         role: 'assistant',
@@ -1138,6 +1195,14 @@ describe('InputController - Message Queue', () => {
         chatSelection,
         canvasSelection: canvasContext,
       });
+      expect(deps.state.messages[0]).toMatchObject({
+        selectionContext: {
+          editor: editorContext,
+          browser: browserContext,
+          chat: chatSelection,
+          canvas: canvasContext,
+        },
+      });
       expect(deps.selectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
       expect(browserSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
       expect(deps.chatSelectionController!.dismissSelectionContext).toHaveBeenCalledTimes(1);
@@ -1153,6 +1218,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage({ content: 'programmatic follow-up' });
 
+      expect(deps.state.messages[0].selectionContext).toBeUndefined();
       expect(deps.selectionController.dismissSelectionContext).not.toHaveBeenCalled();
       expect(deps.chatSelectionController!.dismissSelectionContext).not.toHaveBeenCalled();
       expect(deps.canvasSelectionController.dismissSelectionContext).not.toHaveBeenCalled();
@@ -1184,6 +1250,11 @@ describe('InputController - Message Queue', () => {
       expect(prepareTurnCall[0]).toMatchObject({
         text: 'override text',
         editorSelection: editorContext,
+      });
+      expect(deps.state.messages[0]).toMatchObject({
+        selectionContext: {
+          editor: editorContext,
+        },
       });
       expect(deps.selectionController.dismissSelectionContext).not.toHaveBeenCalled();
       expect(deps.chatSelectionController!.dismissSelectionContext).not.toHaveBeenCalled();

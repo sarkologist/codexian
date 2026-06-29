@@ -13,9 +13,9 @@ const CURRENT_NOTE_SUFFIX_REGEX = /\n\n<current_note>\n[\s\S]*?<\/current_note>$
  * Pattern to match XML context tags appended to prompts.
  * These tags are always preceded by \n\n separator.
  * Matches: current_note, editor_selection (with attributes), editor_cursor (with attributes),
- * context_files, canvas_selection, browser_selection
+ * context_files, canvas_selection, browser_selection, chat_selection
  */
-export const XML_CONTEXT_PATTERN = /\n\n<(?:current_note|editor_selection|editor_cursor|context_files|canvas_selection|browser_selection)[\s>]/;
+export const XML_CONTEXT_PATTERN = /\n\n<(?:current_note|editor_selection|editor_cursor|context_files|canvas_selection|browser_selection|chat_selection)[\s>]/;
 
 export function formatCurrentNote(notePath: string): string {
   return `<current_note>\n${notePath}\n</current_note>`;
@@ -88,6 +88,7 @@ export function extractUserQuery(prompt: string): string {
     .replace(/<context_files>[\s\S]*?<\/context_files>\s*/g, '')
     .replace(/<canvas_selection[\s\S]*?<\/canvas_selection>\s*/g, '')
     .replace(/<browser_selection[\s\S]*?<\/browser_selection>\s*/g, '')
+    .replace(/<chat_selection[\s\S]*?<\/chat_selection>\s*/g, '')
     .trim();
 }
 

@@ -35,6 +35,7 @@ import type { ChatSelectionContext } from '../../../utils/chatSelection';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
+import { buildMessageSelectionContext } from '../../../utils/selectionContext';
 import {
   buildVaultTurnDiff,
   captureVaultDiffSnapshot,
@@ -134,6 +135,7 @@ export class InputController {
     persistedContent?: string;
     currentNote?: string;
     images?: ChatMessage['images'];
+    selectionContext?: ChatMessage['selectionContext'];
   }> = [];
   private sawInitialProviderUserMessage = false;
   private awaitingProviderAssistantStart = false;
@@ -327,6 +329,7 @@ export class InputController {
     if (shouldUseInput && !options?.turnRequestOverride) {
       this.dismissSelectionContext();
     }
+    const selectionContext = buildMessageSelectionContext(turnRequest);
 
     fileContextManager?.markCurrentNoteSent();
 
@@ -337,6 +340,7 @@ export class InputController {
       displayContent,                // Original user input (for UI display)
       timestamp: Date.now(),
       images: imagesForMessage,
+      ...(selectionContext && { selectionContext }),
     };
     state.addMessage(userMsg);
     state.hasPendingConversationSave = true;
@@ -358,6 +362,7 @@ export class InputController {
     this.pendingProviderUserMessages = [{
       displayContent,
       images: imagesForMessage,
+      ...(selectionContext && { selectionContext }),
     }];
     this.sawInitialProviderUserMessage = false;
     this.awaitingProviderAssistantStart = true;
@@ -990,6 +995,7 @@ export class InputController {
 
       this.deps.getFileContextManager()?.markCurrentNoteSent();
 
+      const selectionContext = buildMessageSelectionContext(request);
       this.pendingProviderUserMessages.push({
         displayContent,
         persistedContent: preparedTurn.persistedContent,
@@ -997,6 +1003,7 @@ export class InputController {
           ? undefined
           : preparedTurn.request.currentNotePath,
         images: request.images,
+        ...(selectionContext && { selectionContext }),
       });
     } catch {
       this.restoreQueuedMessageAfterSteerFailure(queuedMessage);
@@ -1093,6 +1100,7 @@ export class InputController {
     const displayContent = expected?.displayContent ?? chunk.content;
     const persistedContent = expected?.persistedContent ?? displayContent;
     const images = expected?.images;
+    const selectionContext = expected?.selectionContext;
     if (displayContent || (images?.length ?? 0) > 0) {
       const userMessage: ChatMessage = {
         id: this.deps.generateId(),
@@ -1102,6 +1110,7 @@ export class InputController {
         timestamp: Date.now(),
         currentNote: expected?.currentNote,
         images,
+        ...(selectionContext && { selectionContext }),
       };
       this.deps.state.addMessage(userMessage);
       this.deps.renderer.addMessage(userMessage);

@@ -104,6 +104,11 @@ describe('XML_CONTEXT_PATTERN', () => {
     expect(XML_CONTEXT_PATTERN.test(text)).toBe(true);
   });
 
+  it('matches chat_selection tag', () => {
+    const text = 'Query\n\n<chat_selection lines="1" role="assistant">\nselected chat content\n</chat_selection>';
+    expect(XML_CONTEXT_PATTERN.test(text)).toBe(true);
+  });
+
   it('does not match without double newline separator', () => {
     const text = 'Query\n<current_note>\ntest.md\n</current_note>';
     expect(XML_CONTEXT_PATTERN.test(text)).toBe(false);
@@ -162,6 +167,11 @@ describe('extractContentBeforeXmlContext', () => {
     it('extracts content before browser_selection tag', () => {
       const prompt = 'Summarize this\n\n<browser_selection source="surfing-view">\nselected web content\n</browser_selection>';
       expect(extractContentBeforeXmlContext(prompt)).toBe('Summarize this');
+    });
+
+    it('extracts content before chat_selection tag', () => {
+      const prompt = 'Reply to this\n\n<chat_selection lines="1" role="assistant">\nselected chat content\n</chat_selection>';
+      expect(extractContentBeforeXmlContext(prompt)).toBe('Reply to this');
     });
 
     it('trims whitespace from extracted content', () => {
@@ -228,6 +238,11 @@ describe('extractUserQuery', () => {
 
     it('strips browser_selection tags', () => {
       const prompt = 'Query <browser_selection source="surfing-view">selection</browser_selection> end';
+      expect(extractUserQuery(prompt)).toBe('Query end');
+    });
+
+    it('strips chat_selection tags', () => {
+      const prompt = 'Query <chat_selection lines="1" role="assistant">selection</chat_selection> end';
       expect(extractUserQuery(prompt)).toBe('Query end');
     });
 

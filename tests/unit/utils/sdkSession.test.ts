@@ -828,6 +828,38 @@ describe('sdkSession', () => {
 
       expect(chatMsg).not.toBeNull();
       expect(chatMsg!.displayContent).toBe('Refactor this code');
+      expect(chatMsg!.selectionContext).toEqual({
+        editor: {
+          notePath: 'src/main.ts',
+          mode: 'selection',
+          selectedText: 'function foo() {}',
+          lineCount: 1,
+        },
+      });
+    });
+
+    it('extracts displayContent and selectionContext from user message with chat_selection tag', () => {
+      const sdkMsg: SDKNativeMessage = {
+        type: 'user',
+        uuid: 'user-chat-selection',
+        timestamp: '2024-01-15T10:30:00Z',
+        message: {
+          content: 'Reply to this\n\n<chat_selection lines="2" role="assistant" message_id="assistant-1">\nFirst line\nSecond line\n</chat_selection>',
+        },
+      };
+
+      const chatMsg = parseSDKMessageToChat(sdkMsg);
+
+      expect(chatMsg).not.toBeNull();
+      expect(chatMsg!.displayContent).toBe('Reply to this');
+      expect(chatMsg!.selectionContext).toEqual({
+        chat: {
+          selectedText: 'First line\nSecond line',
+          lineCount: 2,
+          role: 'assistant',
+          messageId: 'assistant-1',
+        },
+      });
     });
 
     it('extracts displayContent from user message with multiple context tags', () => {

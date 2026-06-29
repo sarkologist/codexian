@@ -6,6 +6,7 @@ import { isWriteEditTool, TOOL_ASK_USER_QUESTION } from '../../../core/tools/too
 import type { ChatMessage, ContentBlock, ToolCallInfo } from '../../../core/types';
 import { extractUserQuery } from '../../../utils/context';
 import { extractDiffData } from '../../../utils/diff';
+import { parseXmlMessageSelectionContext } from '../../../utils/selectionContext';
 import {
   normalizeOpencodeToolInput,
   normalizeOpencodeToolName,
@@ -100,12 +101,15 @@ function mapStoredMessage(message: StoredMessage): ChatMessage | null {
     ?? Date.now();
 
   if (role === 'user') {
-    const promptText = extractUserQuery(getJoinedTextParts(message.parts));
+    const rawPromptText = getJoinedTextParts(message.parts);
+    const promptText = extractUserQuery(rawPromptText);
+    const selectionContext = parseXmlMessageSelectionContext(rawPromptText);
     return {
       assistantMessageId: undefined,
       content: promptText,
       id,
       role: 'user',
+      ...(selectionContext ? { selectionContext } : {}),
       timestamp: createdAt,
       userMessageId: id,
     };

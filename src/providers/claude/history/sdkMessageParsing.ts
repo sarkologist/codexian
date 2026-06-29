@@ -10,6 +10,7 @@ import type {
 import { extractContentBeforeXmlContext } from '../../../utils/context';
 import { extractDiffData } from '../../../utils/diff';
 import { isCompactionCanceledStderr, isInterruptSignalText } from '../../../utils/interrupt';
+import { parseXmlMessageSelectionContext } from '../../../utils/selectionContext';
 import { extractToolResultContent } from '../sdk/toolResultContent';
 import type {
   AsyncSubagentResult,
@@ -195,8 +196,10 @@ export function parseSDKMessageToChat(
     : null;
 
   let displayContent: string | undefined;
+  let selectionContext: ChatMessage['selectionContext'] | undefined;
   if (sdkMsg.type === 'user') {
     displayContent = commandNameMatch ? commandNameMatch[1] : extractDisplayContent(textContent);
+    selectionContext = parseXmlMessageSelectionContext(textContent);
   }
 
   const isInterrupt = sdkMsg.type === 'user' && isInterruptSignalText(textContent);
@@ -207,6 +210,7 @@ export function parseSDKMessageToChat(
     role: sdkMsg.type,
     content: textContent,
     displayContent,
+    ...(selectionContext && { selectionContext }),
     timestamp,
     toolCalls: sdkMsg.type === 'assistant' ? extractToolCalls(content, toolResults) : undefined,
     contentBlocks: sdkMsg.type === 'assistant' ? mapContentBlocks(content) : undefined,
