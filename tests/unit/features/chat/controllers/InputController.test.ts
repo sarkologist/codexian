@@ -1144,6 +1144,52 @@ describe('InputController - Message Queue', () => {
       expect(deps.canvasSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
     });
 
+    it('does not clear selection context for programmatic content sends', async () => {
+      deps = createSendableDeps();
+      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
+        createMockStream([{ type: 'done' }])
+      );
+      controller = new InputController(deps);
+
+      await controller.sendMessage({ content: 'programmatic follow-up' });
+
+      expect(deps.selectionController.dismissSelectionContext).not.toHaveBeenCalled();
+      expect(deps.chatSelectionController!.dismissSelectionContext).not.toHaveBeenCalled();
+      expect(deps.canvasSelectionController.dismissSelectionContext).not.toHaveBeenCalled();
+    });
+
+    it('does not clear selection context for turn request overrides', async () => {
+      const editorContext = {
+        notePath: 'notes/queued.md',
+        mode: 'selection' as const,
+        selectedText: 'already captured',
+        lineCount: 1,
+      };
+      deps = createSendableDeps();
+      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
+        createMockStream([{ type: 'done' }])
+      );
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = 'composer text';
+      controller = new InputController(deps);
+
+      await controller.sendMessage({
+        turnRequestOverride: {
+          text: 'override text',
+          editorSelection: editorContext,
+        },
+      });
+
+      const prepareTurnCall = ((deps as any).mockAgentService.prepareTurn as jest.Mock).mock.calls[0];
+      expect(prepareTurnCall[0]).toMatchObject({
+        text: 'override text',
+        editorSelection: editorContext,
+      });
+      expect(deps.selectionController.dismissSelectionContext).not.toHaveBeenCalled();
+      expect(deps.chatSelectionController!.dismissSelectionContext).not.toHaveBeenCalled();
+      expect(deps.canvasSelectionController.dismissSelectionContext).not.toHaveBeenCalled();
+    });
+
     it('does not append a vault diff card when the turn leaves vault files unchanged', async () => {
       const adapter = new FakeVaultAdapter({ 'note.md': 'same' });
       (deps.plugin as any).app = { vault: { adapter } };
@@ -1303,6 +1349,7 @@ describe('InputController - Message Queue', () => {
             selectedText: 'selected from browser',
             title: 'Surfing',
           }),
+          dismissSelectionContext: jest.fn(),
         } as any,
         getAgentService: () => mockAgentService as any,
       });

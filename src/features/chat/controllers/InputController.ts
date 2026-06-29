@@ -813,10 +813,10 @@ export class InputController {
       canvasSelectionController,
     } = this.deps;
 
-    selectionController.dismissSelectionContext?.();
-    browserSelectionController?.dismissSelectionContext?.();
-    chatSelectionController?.dismissSelectionContext?.();
-    canvasSelectionController.dismissSelectionContext?.();
+    selectionController.dismissSelectionContext();
+    browserSelectionController?.dismissSelectionContext();
+    chatSelectionController?.dismissSelectionContext();
+    canvasSelectionController.dismissSelectionContext();
   }
 
   private getQueuedMessageDisplay(message: QueuedMessage | null): string {
