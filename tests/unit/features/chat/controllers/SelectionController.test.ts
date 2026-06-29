@@ -193,11 +193,11 @@ describe('SelectionController', () => {
     expect(indicatorEl.getAttribute('data-tooltip')).toBeNull();
   });
 
-  it('does not recapture the same live editor selection after indicator dismissal', () => {
+  it('does not recapture the same live editor selection after context dismissal', () => {
     controller.start();
     jest.advanceTimersByTime(250);
 
-    indicatorEl.click();
+    controller.dismissSelectionContext();
     expect(controller.hasSelection()).toBe(false);
 
     jest.advanceTimersByTime(250);

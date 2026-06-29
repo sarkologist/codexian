@@ -23,6 +23,7 @@ export class CanvasSelectionController {
   private contextRowEl: HTMLElement;
   private onVisibilityChange: (() => void) | null;
   private storedSelection: CanvasSelectionContext | null = null;
+  private dismissedSelectionSignature: string | null = null;
   private pollInterval: number | null = null;
 
   constructor(
@@ -68,16 +69,22 @@ export class CanvasSelectionController {
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
     if (nodeIds.length > 0) {
+      const nextContext = { canvasPath, nodeIds };
+      const signature = this.getSelectionSignature(nextContext);
+      if (signature === this.dismissedSelectionSignature) return;
+
       const sameSelection = this.storedSelection
         && this.storedSelection.canvasPath === canvasPath
         && this.storedSelection.nodeIds.length === nodeIds.length
         && this.storedSelection.nodeIds.every(id => nodeIds.includes(id));
 
       if (!sameSelection) {
-        this.storedSelection = { canvasPath, nodeIds };
+        this.dismissedSelectionSignature = null;
+        this.storedSelection = nextContext;
         this.updateIndicator();
       }
     } else if (this.getActiveElement() !== this.inputEl) {
+      this.dismissedSelectionSignature = null;
       if (this.storedSelection) {
         this.storedSelection = null;
         this.updateIndicator();
@@ -135,7 +142,23 @@ export class CanvasSelectionController {
     return this.storedSelection !== null;
   }
 
+  private getSelectionSignature(selection: CanvasSelectionContext): string {
+    return [
+      selection.canvasPath,
+      ...[...selection.nodeIds].sort(),
+    ].join('\u001f');
+  }
+
+  dismissSelectionContext(): void {
+    const dismissedSelectionSignature = this.storedSelection
+      ? this.getSelectionSignature(this.storedSelection)
+      : null;
+    this.clear();
+    this.dismissedSelectionSignature = dismissedSelectionSignature;
+  }
+
   clear(): void {
+    this.dismissedSelectionSignature = null;
     this.storedSelection = null;
     this.updateIndicator();
   }

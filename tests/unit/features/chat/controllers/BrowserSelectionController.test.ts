@@ -146,13 +146,13 @@ describe('BrowserSelectionController', () => {
     expect(indicatorEl.style.display).toBe('none');
   });
 
-  it('does not recapture the same live browser selection after indicator dismissal', async () => {
+  it('does not recapture the same live browser selection after context dismissal', async () => {
     controller.start();
     jest.advanceTimersByTime(250);
     await flushMicrotasks();
     expect(controller.hasSelection()).toBe(true);
 
-    indicatorEl.click();
+    controller.dismissSelectionContext();
     expect(controller.hasSelection()).toBe(false);
 
     jest.advanceTimersByTime(250);

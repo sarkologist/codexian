@@ -205,12 +205,15 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     } as any,
     selectionController: {
       getContext: jest.fn().mockReturnValue(null),
+      dismissSelectionContext: jest.fn(),
     } as any,
     chatSelectionController: {
       getContext: jest.fn().mockReturnValue(null),
+      dismissSelectionContext: jest.fn(),
     } as any,
     canvasSelectionController: {
       getContext: jest.fn().mockReturnValue(null),
+      dismissSelectionContext: jest.fn(),
     } as any,
     conversationController: {
       save: jest.fn(),
@@ -323,6 +326,59 @@ describe('InputController - Message Queue', () => {
         text: 'queued message',
         chatSelection,
       });
+    });
+
+    it('snapshots and clears selection context when queuing a composer submit', async () => {
+      const editorContext = {
+        notePath: 'notes/test.md',
+        mode: 'selection' as const,
+        selectedText: 'selected editor text',
+        lineCount: 1,
+        startLine: 4,
+      };
+      const browserContext = {
+        source: 'browser:https://example.com',
+        selectedText: 'selected browser text',
+        title: 'Example',
+      };
+      const chatSelection = {
+        selectedText: 'selected chat text',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant' as const,
+      };
+      const canvasContext = {
+        canvasPath: 'board.canvas',
+        nodeIds: ['node-a'],
+      };
+      const browserSelectionController = {
+        getContext: jest.fn().mockReturnValue(browserContext),
+        dismissSelectionContext: jest.fn(),
+      };
+      deps = createMockDeps({
+        browserSelectionController: browserSelectionController as any,
+      });
+      controller = new InputController(deps);
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      deps.state.isStreaming = true;
+      (deps.selectionController.getContext as jest.Mock).mockReturnValue(editorContext);
+      (deps.chatSelectionController!.getContext as jest.Mock).mockReturnValue(chatSelection);
+      (deps.canvasSelectionController.getContext as jest.Mock).mockReturnValue(canvasContext);
+      inputEl.value = 'queued message';
+
+      await controller.sendMessage();
+
+      expect(deps.state.queuedMessage?.turnRequest).toMatchObject({
+        text: 'queued message',
+        editorSelection: editorContext,
+        browserSelection: browserContext,
+        chatSelection,
+        canvasSelection: canvasContext,
+      });
+      expect(deps.selectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(browserSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(deps.chatSelectionController!.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(deps.canvasSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
     });
 
     it('should queue message with images when streaming', async () => {
@@ -1030,6 +1086,62 @@ describe('InputController - Message Queue', () => {
       expect(deps.conversationController.save).toHaveBeenCalledWith(true, undefined);
       expect((deps as any).mockAgentService.query).toHaveBeenCalled();
       expect(deps.state.isStreaming).toBe(false);
+    });
+
+    it('snapshots and clears selection context when sending a composer submit', async () => {
+      const editorContext = {
+        notePath: 'notes/test.md',
+        mode: 'selection' as const,
+        selectedText: 'selected editor text',
+        lineCount: 1,
+        startLine: 4,
+      };
+      const browserContext = {
+        source: 'browser:https://example.com',
+        selectedText: 'selected browser text',
+        title: 'Example',
+      };
+      const chatSelection = {
+        selectedText: 'selected chat text',
+        lineCount: 1,
+        messageId: 'assistant-1',
+        role: 'assistant' as const,
+      };
+      const canvasContext = {
+        canvasPath: 'board.canvas',
+        nodeIds: ['node-a'],
+      };
+      const browserSelectionController = {
+        getContext: jest.fn().mockReturnValue(browserContext),
+        dismissSelectionContext: jest.fn(),
+      };
+      deps = createSendableDeps({
+        browserSelectionController: browserSelectionController as any,
+      });
+      (deps.selectionController.getContext as jest.Mock).mockReturnValue(editorContext);
+      (deps.chatSelectionController!.getContext as jest.Mock).mockReturnValue(chatSelection);
+      (deps.canvasSelectionController.getContext as jest.Mock).mockReturnValue(canvasContext);
+      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
+        createMockStream([{ type: 'done' }])
+      );
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      const prepareTurnCall = ((deps as any).mockAgentService.prepareTurn as jest.Mock).mock.calls[0];
+      expect(prepareTurnCall[0]).toMatchObject({
+        text: 'hello',
+        editorSelection: editorContext,
+        browserSelection: browserContext,
+        chatSelection,
+        canvasSelection: canvasContext,
+      });
+      expect(deps.selectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(browserSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(deps.chatSelectionController!.dismissSelectionContext).toHaveBeenCalledTimes(1);
+      expect(deps.canvasSelectionController.dismissSelectionContext).toHaveBeenCalledTimes(1);
     });
 
     it('does not append a vault diff card when the turn leaves vault files unchanged', async () => {

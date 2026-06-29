@@ -210,12 +210,12 @@ describe('ChatSelectionController', () => {
     expect(indicatorEl.classList.contains('claudian-hidden')).toBe(true);
   });
 
-  it('does not recapture the same live chat selection after indicator dismissal', () => {
+  it('does not recapture the same live chat selection after context dismissal', () => {
     controller.start();
     jest.advanceTimersByTime(250);
     expect(controller.hasSelection()).toBe(true);
 
-    indicatorEl.click();
+    controller.dismissSelectionContext();
     expect(controller.hasSelection()).toBe(false);
 
     jest.advanceTimersByTime(250);

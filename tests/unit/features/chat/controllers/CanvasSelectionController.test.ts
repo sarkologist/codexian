@@ -213,4 +213,25 @@ describe('CanvasSelectionController', () => {
     expect(controller.hasSelection()).toBe(false);
     expect(indicatorEl.style.display).toBe('none');
   });
+
+  it('does not recapture the same live canvas selection after context dismissal', () => {
+    controller.start();
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(true);
+
+    controller.dismissSelectionContext();
+    expect(controller.hasSelection()).toBe(false);
+
+    jest.advanceTimersByTime(250);
+    expect(controller.hasSelection()).toBe(false);
+
+    canvasView.canvas.selection = new Set([createMockCanvasNode('new-node')]);
+    jest.advanceTimersByTime(250);
+
+    expect(controller.hasSelection()).toBe(true);
+    expect(controller.getContext()).toEqual({
+      canvasPath: 'my-canvas.canvas',
+      nodeIds: ['new-node'],
+    });
+  });
 });

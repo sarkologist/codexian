@@ -261,6 +261,9 @@ export class InputController {
         chatContextOverride: chatContext,
         canvasContextOverride: canvasContext,
       });
+      if (shouldUseInput) {
+        this.dismissSelectionContext();
+      }
       state.queuedMessage = this.mergeQueuedMessages(
         state.queuedMessage,
         this.createQueuedMessage(displayContent, turnRequest),
@@ -321,6 +324,9 @@ export class InputController {
         canvasContextOverride: options?.canvasContextOverride,
       });
     const { displayContent, turnRequest } = turnSubmission;
+    if (shouldUseInput && !options?.turnRequestOverride) {
+      this.dismissSelectionContext();
+    }
 
     fileContextManager?.markCurrentNoteSent();
 
@@ -797,6 +803,20 @@ export class InputController {
           : undefined,
       },
     };
+  }
+
+  private dismissSelectionContext(): void {
+    const {
+      selectionController,
+      browserSelectionController,
+      chatSelectionController,
+      canvasSelectionController,
+    } = this.deps;
+
+    selectionController.dismissSelectionContext?.();
+    browserSelectionController?.dismissSelectionContext?.();
+    chatSelectionController?.dismissSelectionContext?.();
+    canvasSelectionController.dismissSelectionContext?.();
   }
 
   private getQueuedMessageDisplay(message: QueuedMessage | null): string {
