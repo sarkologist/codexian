@@ -11,15 +11,23 @@ import {
   TOOL_WRITE_STDIN,
 } from '../../../core/tools/toolNames';
 import { extractToolResultContent } from '../../../core/tools/toolResultContent';
-import type { ChatMessage, ImageAttachment, SubagentInfo, ToolCallInfo } from '../../../core/types';
+import type {
+  ChatMessage,
+  ImageAttachment,
+  MessageSelectionContext,
+  SubagentInfo,
+  ToolCallInfo,
+} from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type ClaudianPlugin from '../../../main';
 import { formatDurationMmSs } from '../../../utils/date';
 import { processFileLinks, registerDiffLineHandler, registerFileLinkHandler } from '../../../utils/fileLink';
 import { replaceImageEmbedsWithHtml } from '../../../utils/imageEmbed';
 import { escapeMathDelimitersForStreaming } from '../../../utils/markdownMath';
+import { hasMessageSelectionContext } from '../../../utils/selectionContext';
 import { COMPLETION_DURATION_LABEL } from '../constants';
 import { findRewindContext } from '../rewind';
+import { setupCollapsible } from './collapsible';
 import { resolveSubagentLifecycleAdapter } from './subagentLifecycleResolution';
 import {
   renderStoredAsyncSubagent,
@@ -121,8 +129,7 @@ export class MessageRenderer {
 
     // Skip empty bubble for image-only messages
     if (msg.role === 'user') {
-      const textToShow = msg.displayContent ?? msg.content;
-      if (!textToShow) {
+      if (!this.hasVisibleUserContent(msg)) {
         this.scrollToBottom();
         const lastChild = this.messagesEl.lastElementChild as HTMLElement;
         return lastChild ?? this.messagesEl;
@@ -141,12 +148,7 @@ export class MessageRenderer {
     this.liveMessageEls.set(msg.id, msgEl);
 
     if (msg.role === 'user') {
-      const textToShow = msg.displayContent ?? msg.content;
-      if (textToShow) {
-        const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-        void this.renderContent(textEl, textToShow);
-        this.addUserCopyButton(msgEl, textToShow);
-      }
+      this.renderUserMessageContent(msg, msgEl, contentEl);
     }
 
     this.scrollToBottom();
@@ -169,22 +171,13 @@ export class MessageRenderer {
       return;
     }
 
-    contentEl.empty();
-
-    const textToShow = msg.displayContent ?? msg.content;
-    if (textToShow) {
-      const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-      void this.renderContent(textEl, textToShow);
-    }
-
     const toolbar = msgEl.querySelector<HTMLElement>('.claudian-user-msg-actions');
     if (toolbar) {
       toolbar.querySelectorAll('.claudian-user-msg-copy-btn').forEach((el) => el.remove());
     }
 
-    if (textToShow) {
-      this.addUserCopyButton(msgEl, textToShow);
-    }
+    contentEl.empty();
+    this.renderUserMessageContent(msg, msgEl, contentEl);
   }
 
   removeMessage(messageId: string): void {
@@ -249,8 +242,7 @@ export class MessageRenderer {
 
     // Skip empty bubble for image-only messages
     if (msg.role === 'user') {
-      const textToShow = msg.displayContent ?? msg.content;
-      if (!textToShow) {
+      if (!this.hasVisibleUserContent(msg)) {
         return;
       }
     }
@@ -269,12 +261,7 @@ export class MessageRenderer {
     const contentEl = msgEl.createDiv({ cls: 'claudian-message-content', attr: { dir: 'auto' } });
 
     if (msg.role === 'user') {
-      const textToShow = msg.displayContent ?? msg.content;
-      if (textToShow) {
-        const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-        void this.renderContent(textEl, textToShow);
-        this.addUserCopyButton(msgEl, textToShow);
-      }
+      this.renderUserMessageContent(msg, msgEl, contentEl);
       if (msg.userMessageId && this.isRewindEligible(allMessages, index)) {
         if (this.rewindCallback) {
           this.addRewindButton(msgEl, msg.id);
@@ -289,6 +276,135 @@ export class MessageRenderer {
         this.appendInterruptIndicator(contentEl);
       }
     }
+  }
+
+  private hasVisibleUserContent(msg: ChatMessage): boolean {
+    const textToShow = msg.displayContent ?? msg.content;
+    return !!textToShow || hasMessageSelectionContext(msg.selectionContext);
+  }
+
+  private renderUserMessageContent(
+    msg: ChatMessage,
+    msgEl: HTMLElement,
+    contentEl: HTMLElement,
+  ): void {
+    const textToShow = msg.displayContent ?? msg.content;
+    if (textToShow) {
+      const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
+      void this.renderContent(textEl, textToShow);
+      this.addUserCopyButton(msgEl, textToShow);
+    }
+    this.renderSelectionContextAttachment(contentEl, msg.selectionContext);
+  }
+
+  private renderSelectionContextAttachment(
+    parentEl: HTMLElement,
+    context: MessageSelectionContext | undefined,
+  ): void {
+    if (!hasMessageSelectionContext(context)) return;
+
+    const entries = this.getSelectionContextEntries(context);
+    if (entries.length === 0) return;
+
+    const wrapperEl = parentEl.createDiv({ cls: 'claudian-selection-context' });
+    const headerEl = wrapperEl.createDiv({ cls: 'claudian-selection-context-header' });
+    headerEl.setAttribute('tabindex', '0');
+    headerEl.setAttribute('role', 'button');
+    headerEl.createSpan({
+      cls: 'claudian-selection-context-label',
+      text: `Selection context \u00B7 ${entries.map(entry => entry.shortLabel).join(', ')}`,
+    });
+    const contentEl = wrapperEl.createDiv({ cls: 'claudian-selection-context-content' });
+    const state = { isExpanded: false };
+
+    setupCollapsible(wrapperEl, headerEl, contentEl, state, {
+      initiallyExpanded: false,
+      baseAriaLabel: 'Selection context',
+    });
+
+    for (const entry of entries) {
+      const entryEl = contentEl.createDiv({ cls: 'claudian-selection-context-entry' });
+      entryEl.createDiv({ cls: 'claudian-selection-context-entry-title', text: entry.title });
+      if (entry.meta.length > 0) {
+        entryEl.createDiv({
+          cls: 'claudian-selection-context-entry-meta',
+          text: entry.meta.join(' \u00B7 '),
+        });
+      }
+      entryEl.createEl('pre', {
+        cls: 'claudian-selection-context-body',
+        text: entry.body,
+      });
+    }
+  }
+
+  private getSelectionContextEntries(context: MessageSelectionContext): Array<{
+    shortLabel: string;
+    title: string;
+    meta: string[];
+    body: string;
+  }> {
+    const entries: Array<{
+      shortLabel: string;
+      title: string;
+      meta: string[];
+      body: string;
+    }> = [];
+
+    if (context.editor?.selectedText) {
+      const meta = [context.editor.notePath];
+      if (context.editor.startLine !== undefined && context.editor.lineCount) {
+        meta.push(`lines ${context.editor.startLine}-${context.editor.startLine + context.editor.lineCount - 1}`);
+      } else if (context.editor.lineCount) {
+        meta.push(`${context.editor.lineCount} ${context.editor.lineCount === 1 ? 'line' : 'lines'}`);
+      }
+      entries.push({
+        shortLabel: 'Editor',
+        title: 'Editor selection',
+        meta,
+        body: context.editor.selectedText,
+      });
+    }
+
+    if (context.browser?.selectedText) {
+      entries.push({
+        shortLabel: 'Browser',
+        title: 'Browser selection',
+        meta: [
+          context.browser.title,
+          context.browser.url,
+          context.browser.source,
+        ].filter((value): value is string => !!value),
+        body: context.browser.selectedText,
+      });
+    }
+
+    if (context.chat?.selectedText) {
+      entries.push({
+        shortLabel: 'Chat',
+        title: 'Chat selection',
+        meta: [
+          context.chat.role ? `${context.chat.role} message` : undefined,
+          context.chat.messageId ? `message ${context.chat.messageId}` : undefined,
+          `${context.chat.lineCount} ${context.chat.lineCount === 1 ? 'line' : 'lines'}`,
+        ].filter((value): value is string => !!value),
+        body: context.chat.selectedText,
+      });
+    }
+
+    if (context.canvas?.nodeIds.length) {
+      entries.push({
+        shortLabel: 'Canvas',
+        title: 'Canvas selection',
+        meta: [
+          context.canvas.canvasPath,
+          `${context.canvas.nodeIds.length} ${context.canvas.nodeIds.length === 1 ? 'node' : 'nodes'}`,
+        ],
+        body: context.canvas.nodeIds.join('\n'),
+      });
+    }
+
+    return entries;
   }
 
   private hasVisibleContent(msg: ChatMessage): boolean {

@@ -156,6 +156,51 @@ describe('mapOpencodeMessages', () => {
     ]);
   });
 
+  it('hydrates XML selection context from stored user messages', () => {
+    const messages = mapOpencodeMessages([
+      {
+        info: {
+          id: 'msg-user',
+          role: 'user',
+          time: { created: 1_000 },
+        },
+        parts: [
+          {
+            id: 'part-user',
+            text: [
+              'Reply to this',
+              '',
+              '<chat_selection lines="2" role="assistant" message_id="assistant-1">',
+              'First line',
+              'Second line',
+              '</chat_selection>',
+            ].join('\n'),
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toEqual([
+      {
+        assistantMessageId: undefined,
+        content: 'Reply to this',
+        id: 'msg-user',
+        role: 'user',
+        selectionContext: {
+          chat: {
+            selectedText: 'First line\nSecond line',
+            lineCount: 2,
+            role: 'assistant',
+            messageId: 'assistant-1',
+          },
+        },
+        timestamp: 1_000,
+        userMessageId: 'msg-user',
+      },
+    ]);
+  });
+
   it('merges adjacent assistant fragments from one OpenCode turn', () => {
     const messages = mapOpencodeMessages([
       {

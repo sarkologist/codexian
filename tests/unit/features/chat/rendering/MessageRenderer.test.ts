@@ -261,6 +261,223 @@ describe('MessageRenderer', () => {
     expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'user input only');
   });
 
+  it('renders collapsed selection context below stored user messages', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+    const renderContentSpy = jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
+
+    const selectedText = '  const x = 1;\n  return x;';
+    const msg: ChatMessage = {
+      id: 'u-selection',
+      role: 'user',
+      content: `Explain this\n\n<editor_selection path="src/main.ts">\n${selectedText}\n</editor_selection>`,
+      displayContent: 'Explain this',
+      timestamp: Date.now(),
+      selectionContext: {
+        editor: {
+          notePath: 'src/main.ts',
+          mode: 'selection',
+          selectedText,
+          startLine: 4,
+          lineCount: 2,
+        },
+      },
+    };
+
+    renderer.renderStoredMessage(msg);
+
+    expect(renderContentSpy).toHaveBeenCalledWith(expect.anything(), 'Explain this');
+    const attachmentEl = messagesEl.querySelector('.claudian-selection-context');
+    expect(attachmentEl).not.toBeNull();
+    expect(attachmentEl!.querySelector('.claudian-selection-context-label')?.textContent).toBe(
+      'Selection context · Editor'
+    );
+    const contentEl = attachmentEl!.querySelector('.claudian-selection-context-content');
+    const headerEl = attachmentEl!.querySelector('.claudian-selection-context-header');
+    expect(contentEl?.hasClass('claudian-hidden')).toBe(true);
+    expect(headerEl?.getAttribute('aria-expanded')).toBe('false');
+    expect(attachmentEl!.querySelector('.claudian-selection-context-entry-meta')?.textContent).toBe(
+      'src/main.ts · lines 4-5'
+    );
+    expect(attachmentEl!.querySelector('.claudian-selection-context-body')?.textContent).toBe(selectedText);
+  });
+
+  it('renders live user selection context and preserves whitespace as text', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+    jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
+
+    const browserText = 'First line\n\n    Indented <not markdown>';
+    const msg: ChatMessage = {
+      id: 'u-live-selection',
+      role: 'user',
+      content: 'Summarize',
+      timestamp: Date.now(),
+      selectionContext: {
+        browser: {
+          source: 'browser:tab',
+          title: 'Docs',
+          url: 'https://example.com/docs',
+          selectedText: browserText,
+        },
+        chat: {
+          selectedText: 'Assistant said\n  use this',
+          lineCount: 2,
+          role: 'assistant',
+          messageId: 'assistant-1',
+        },
+        canvas: {
+          canvasPath: 'board.canvas',
+          nodeIds: ['node-a', 'node-b'],
+        },
+      },
+    };
+
+    renderer.addMessage(msg);
+
+    const attachmentEl = messagesEl.querySelector('.claudian-selection-context');
+    expect(attachmentEl).not.toBeNull();
+    expect(attachmentEl!.querySelector('.claudian-selection-context-label')?.textContent).toBe(
+      'Selection context · Browser, Chat, Canvas'
+    );
+    const bodies = attachmentEl!.querySelectorAll('.claudian-selection-context-body');
+    expect(bodies.map((body: any) => body.textContent)).toEqual([
+      browserText,
+      'Assistant said\n  use this',
+      'node-a\nnode-b',
+    ]);
+  });
+
+  it('copies only the visible user prompt when selection context exists', async () => {
+    const originalNavigator = globalThis.navigator;
+    const writeTextMock = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { clipboard: { writeText: writeTextMock } },
+      writable: true,
+      configurable: true,
+    });
+
+    try {
+      const messagesEl = createMockEl();
+      const { renderer } = createRenderer(messagesEl);
+      jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
+
+      const msg: ChatMessage = {
+        id: 'u-copy-selection',
+        role: 'user',
+        content: 'Visible prompt\n\n<chat_selection lines="1">hidden</chat_selection>',
+        displayContent: 'Visible prompt',
+        timestamp: Date.now(),
+        selectionContext: {
+          chat: {
+            selectedText: 'hidden',
+            lineCount: 1,
+            role: 'assistant',
+          },
+        },
+      };
+
+      renderer.addMessage(msg);
+
+      const copyBtn = messagesEl.querySelector('.claudian-user-msg-copy-btn');
+      expect(copyBtn).not.toBeNull();
+      copyBtn!.click();
+
+      expect(writeTextMock).toHaveBeenCalledWith('Visible prompt');
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
+  it('renders a user bubble for selection-only messages', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+
+    const msg: ChatMessage = {
+      id: 'u-selection-only',
+      role: 'user',
+      content: '',
+      timestamp: Date.now(),
+      selectionContext: {
+        editor: {
+          notePath: 'src/main.ts',
+          mode: 'selection',
+          selectedText: 'selected',
+          lineCount: 1,
+        },
+      },
+    };
+
+    renderer.renderStoredMessage(msg);
+
+    expect(messagesEl.querySelector('.claudian-message-user')).not.toBeNull();
+    expect(messagesEl.querySelector('.claudian-selection-context-body')?.textContent).toBe('selected');
+  });
+
+  it('skips empty user bubbles when selection context has no renderable entries', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+
+    renderer.renderStoredMessage({
+      id: 'u-empty-selection-context',
+      role: 'user',
+      content: '',
+      timestamp: Date.now(),
+      selectionContext: {
+        canvas: {
+          canvasPath: 'board.canvas',
+          nodeIds: [],
+        },
+      },
+    });
+
+    expect(messagesEl.querySelector('.claudian-message-user')).toBeNull();
+    expect(messagesEl.querySelector('.claudian-selection-context')).toBeNull();
+  });
+
+  it('updates live user selection context without duplicating controls', () => {
+    const messagesEl = createMockEl();
+    const { renderer } = createRenderer(messagesEl);
+    jest.spyOn(renderer, 'renderContent').mockResolvedValue(undefined);
+
+    renderer.addMessage({
+      id: 'u-update-selection',
+      role: 'user',
+      content: 'Initial prompt',
+      timestamp: Date.now(),
+      selectionContext: {
+        editor: {
+          notePath: 'src/old.ts',
+          mode: 'selection',
+          selectedText: 'old selection',
+          lineCount: 1,
+        },
+      },
+    });
+
+    renderer.updateLiveUserMessage({
+      id: 'u-update-selection',
+      role: 'user',
+      content: 'Updated prompt',
+      displayContent: 'Updated prompt',
+      timestamp: Date.now(),
+      selectionContext: {
+        browser: {
+          source: 'browser:tab',
+          selectedText: 'new browser selection',
+        },
+      },
+    });
+
+    const bodies = messagesEl.querySelectorAll('.claudian-selection-context-body');
+    expect(bodies.map((body: any) => body.textContent)).toEqual(['new browser selection']);
+    expect(messagesEl.querySelectorAll('.claudian-selection-context')).toHaveLength(1);
+  });
+
   it('skips empty user message bubble (image-only)', () => {
     const messagesEl = createMockEl();
     const { renderer } = createRenderer(messagesEl);

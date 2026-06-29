@@ -510,6 +510,10 @@ export class SelectionController {
     this.dismissedSelectionSignature = dismissedSelectionSignature;
   }
 
+  dismissSelectionContext(): void {
+    this.dismissFromIndicator();
+  }
+
   clear(): void {
     this.dismissedSelectionSignature = null;
     this.inputHandoffGraceUntil = null;

@@ -1,3 +1,7 @@
+import type { BrowserSelectionContext } from '../../utils/browser';
+import type { CanvasSelectionContext } from '../../utils/canvas';
+import type { ChatSelectionContext } from '../../utils/chatSelection';
+import type { EditorSelectionContext } from '../../utils/editor';
 import type { SDKToolUseResult, VaultTurnDiff } from './diff';
 import type { ProviderId } from './provider';
 import type { SubagentMode, ToolCallInfo } from './tools';
@@ -36,6 +40,14 @@ export type ContentBlock =
   | { type: 'context_compacted' }
   | { type: 'vault_diff'; diffId: string };
 
+/** User-message selection context shown as a transcript attachment. */
+export interface MessageSelectionContext {
+  editor?: EditorSelectionContext;
+  browser?: BrowserSelectionContext;
+  chat?: ChatSelectionContext;
+  canvas?: CanvasSelectionContext;
+}
+
 /** Chat message with content, tool calls, and attachments. */
 export interface ChatMessage {
   id: string;
@@ -48,6 +60,7 @@ export interface ChatMessage {
   contentBlocks?: ContentBlock[];
   currentNote?: string;
   images?: ImageAttachment[];
+  selectionContext?: MessageSelectionContext;
   /** True if this message represents a user interrupt (from SDK storage). */
   isInterrupt?: boolean;
   /** True if this message is rebuilt context sent to SDK on session reset (should be hidden). */

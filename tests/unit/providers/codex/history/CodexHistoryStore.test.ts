@@ -865,6 +865,55 @@ describe('CodexHistoryStore', () => {
       expect(messages[0]).toMatchObject({
         role: 'user',
         displayContent: 'Explain this',
+        selectionContext: {
+          editor: {
+            notePath: 'notes/code.md',
+            mode: 'selection',
+            selectedText: 'const x = 1;',
+            lineCount: 1,
+          },
+        },
+      });
+    });
+
+    it('should hydrate chat selection context from bracket context', () => {
+      const content = [
+        JSON.stringify({
+          timestamp: '2026-03-27T00:00:00.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{
+              type: 'input_text',
+              text: 'Reply to this\n[Chat selection from assistant message assistant-1:\nfirst line\nsecond line\n]',
+            }],
+          },
+        }),
+        JSON.stringify({
+          timestamp: '2026-03-27T00:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Done.' }],
+          },
+        }),
+      ].join('\n');
+
+      const messages = parseCodexSessionContent(content);
+
+      expect(messages[0]).toMatchObject({
+        role: 'user',
+        displayContent: 'Reply to this',
+        selectionContext: {
+          chat: {
+            selectedText: 'first line\nsecond line',
+            lineCount: 2,
+            role: 'assistant',
+            messageId: 'assistant-1',
+          },
+        },
       });
     });
 
