@@ -1304,8 +1304,8 @@ describe('InputController - Message Queue', () => {
         type: 'vault_diff',
         diffId: 'assistant-native',
       });
+      // .claudian/internal.json is hidden, so its change is excluded from the diff.
       expect(assistantMsg.vaultDiffs?.['assistant-native'].files.map(file => file.path)).toEqual([
-        '.claudian/internal.json',
         'created.md',
         'note.md',
       ]);
