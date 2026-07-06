@@ -23,7 +23,12 @@ import type ClaudianPlugin from '../../../main';
 import { formatDurationMmSs } from '../../../utils/date';
 import { processFileLinks, registerDiffLineHandler, registerFileLinkHandler } from '../../../utils/fileLink';
 import { replaceImageEmbedsWithHtml } from '../../../utils/imageEmbed';
-import { escapeMathDelimitersForStreaming } from '../../../utils/markdownMath';
+import {
+  CLAUDIAN_MATH_SOURCE_ATTR,
+  collectRenderedMathElements,
+  escapeMathDelimitersForStreaming,
+  extractMarkdownMathSources,
+} from '../../../utils/markdownMath';
 import { hasMessageSelectionContext } from '../../../utils/selectionContext';
 import { COMPLETION_DURATION_LABEL } from '../constants';
 import { findRewindContext } from '../rewind';
@@ -847,6 +852,8 @@ export class MessageRenderer {
         this.component
       );
 
+      this.annotateRenderedMathSources(el, renderMarkdown);
+
       // Wrap pre elements and move buttons outside scroll area
       el.querySelectorAll('pre').forEach((pre) => {
         // Skip if already wrapped
@@ -902,6 +909,28 @@ export class MessageRenderer {
         text: 'Failed to render message content.',
       });
     }
+  }
+
+  private annotateRenderedMathSources(el: HTMLElement, markdown: string): void {
+    const mathSources = extractMarkdownMathSources(markdown);
+    if (mathSources.length === 0) return;
+
+    const mathEls = collectRenderedMathElements(el);
+    if (mathEls.length !== mathSources.length) return;
+
+    mathEls.forEach((mathEl, index) => {
+      const source = mathSources[index];
+      if (source) {
+        this.annotateRenderedMathElement(mathEl, source);
+      }
+    });
+  }
+
+  private annotateRenderedMathElement(mathEl: HTMLElement, source: string): void {
+    mathEl.setAttribute(CLAUDIAN_MATH_SOURCE_ATTR, source);
+    mathEl.querySelectorAll<HTMLElement>('mjx-container').forEach((container) => {
+      container.setAttribute(CLAUDIAN_MATH_SOURCE_ATTR, source);
+    });
   }
 
   // ============================================

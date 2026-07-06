@@ -1,9 +1,47 @@
 import type { ChatSelectionContext } from '../../../utils/chatSelection';
+import {
+  collectRenderedMathElements,
+  extractRenderedMathSource,
+} from '../../../utils/markdownMath';
 import { updateContextRowHasContent } from './contextRowVisibility';
 import { formatSelectionPreview } from './selectionPreview';
 
 const CHAT_SELECTION_POLL_INTERVAL = 250;
 const MESSAGE_SELECTION_GRACE_MS = 1500;
+const CLIPBOARD_BLOCK_SELECTOR = [
+  'address',
+  'article',
+  'aside',
+  'blockquote',
+  'dd',
+  'div',
+  'dl',
+  'dt',
+  'figcaption',
+  'figure',
+  'footer',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'header',
+  'li',
+  'main',
+  'ol',
+  'p',
+  'pre',
+  'section',
+  'table',
+  'tbody',
+  'td',
+  'tfoot',
+  'th',
+  'thead',
+  'tr',
+  'ul',
+].join(',');
 
 export class ChatSelectionController {
   private messagesEl: HTMLElement;
@@ -15,6 +53,7 @@ export class ChatSelectionController {
   private pollInterval: number | null = null;
   private recentMessagesSelectionUntil: number | null = null;
   private readonly selectionChangeHandler = () => this.poll();
+  private readonly copyHandler = (event: ClipboardEvent) => this.handleCopy(event);
   private readonly messagesPointerHandler = () => {
     this.recentMessagesSelectionUntil = Date.now() + MESSAGE_SELECTION_GRACE_MS;
     window.setTimeout(() => this.poll(), 0);
@@ -37,6 +76,7 @@ export class ChatSelectionController {
   start(): void {
     if (this.pollInterval) return;
     this.messagesEl.ownerDocument.addEventListener('selectionchange', this.selectionChangeHandler);
+    this.messagesEl.ownerDocument.addEventListener('copy', this.copyHandler);
     this.messagesEl.addEventListener('pointerdown', this.messagesPointerHandler);
     this.messagesEl.addEventListener('pointerup', this.messagesPointerHandler);
     this.messagesEl.addEventListener('mouseup', this.messagesPointerHandler);
@@ -51,6 +91,7 @@ export class ChatSelectionController {
       this.pollInterval = null;
     }
     this.messagesEl.ownerDocument.removeEventListener('selectionchange', this.selectionChangeHandler);
+    this.messagesEl.ownerDocument.removeEventListener('copy', this.copyHandler);
     this.messagesEl.removeEventListener('pointerdown', this.messagesPointerHandler);
     this.messagesEl.removeEventListener('pointerup', this.messagesPointerHandler);
     this.messagesEl.removeEventListener('mouseup', this.messagesPointerHandler);
@@ -74,6 +115,107 @@ export class ChatSelectionController {
       return;
     }
 
+  }
+
+  private handleCopy(event: ClipboardEvent): void {
+    const selection = this.messagesEl.ownerDocument.getSelection?.() ?? null;
+    if (!this.shouldCaptureSelection(selection)) return;
+
+    const text = this.buildClipboardText(selection);
+    if (!text || !event.clipboardData) return;
+
+    event.clipboardData.setData('text/plain', text);
+    event.preventDefault();
+  }
+
+  private buildClipboardText(selection: Selection | null): string | null {
+    if (!selection || selection.rangeCount === 0) return null;
+
+    const parts: string[] = [];
+    let replacedMath = false;
+
+    for (let index = 0; index < selection.rangeCount; index += 1) {
+      const range = selection.getRangeAt(index);
+      if (!this.rangeIntersectsMessages(range)) continue;
+
+      let container: HTMLElement;
+      try {
+        container = this.messagesEl.ownerDocument.createElement('div');
+        container.appendChild(range.cloneContents());
+      } catch {
+        continue;
+      }
+
+      if (this.replaceMathElementsWithSourceText(container)) {
+        replacedMath = true;
+      }
+      parts.push(this.extractClipboardText(container));
+    }
+
+    if (!replacedMath) return null;
+    return this.normalizeClipboardText(parts.join('\n')) || null;
+  }
+
+  private replaceMathElementsWithSourceText(container: HTMLElement): boolean {
+    const mathEls = collectRenderedMathElements(container);
+    let replaced = false;
+
+    for (const mathEl of mathEls) {
+      const source = this.extractMathText(mathEl);
+      if (!source) continue;
+
+      const replacementText = this.isBlockMathElement(mathEl)
+        ? `\n${source}\n`
+        : source;
+      mathEl.replaceWith(container.ownerDocument.createTextNode(replacementText));
+      replaced = true;
+    }
+
+    return replaced;
+  }
+
+  private extractClipboardText(container: HTMLElement): string {
+    let text = '';
+    const appendLineBreak = () => {
+      if (text && !text.endsWith('\n')) {
+        text += '\n';
+      }
+    };
+
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.nodeValue ?? '';
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+      const el = node as Element;
+      if (this.shouldSkipClipboardElement(el)) return;
+
+      const isBlock = this.isClipboardBlockElement(el);
+      if (isBlock) appendLineBreak();
+      el.childNodes.forEach(walk);
+      if (isBlock) appendLineBreak();
+    };
+
+    container.childNodes.forEach(walk);
+    return text;
+  }
+
+  private shouldSkipClipboardElement(el: Element): boolean {
+    return el.matches('.claudian-text-copy-btn, .claudian-user-msg-actions, .copy-code-button');
+  }
+
+  private isClipboardBlockElement(el: Element): boolean {
+    return el.matches(CLIPBOARD_BLOCK_SELECTOR);
+  }
+
+  private normalizeClipboardText(text: string): string {
+    return text
+      .replace(/\u00A0/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   private getSelectedText(selection: Selection | null): string {
@@ -149,11 +291,9 @@ export class ChatSelectionController {
   }
 
   private collectMathElementsFromRange(range: Range, mathEls: Set<HTMLElement>): void {
-    const candidates = this.messagesEl.querySelectorAll<HTMLElement>('.math, mjx-container');
-    for (const candidate of candidates) {
+    for (const candidate of collectRenderedMathElements(this.messagesEl)) {
       if (!this.rangeIntersectsNode(range, candidate)) continue;
-      const mathEl = this.closestMathElement(candidate);
-      if (mathEl) mathEls.add(mathEl);
+      mathEls.add(candidate);
     }
   }
 
@@ -176,28 +316,11 @@ export class ChatSelectionController {
   }
 
   private extractMathText(el: HTMLElement): string {
-    const sourceText = this.extractMathSourceText(el);
-    if (sourceText) return sourceText;
-
-    const assistiveText = el.querySelector('mjx-assistive-mml, math')?.textContent?.trim();
-    if (assistiveText) return assistiveText;
-
-    return el.textContent?.trim() ?? '';
+    return extractRenderedMathSource(el);
   }
 
-  private extractMathSourceText(el: HTMLElement): string {
-    const annotation = el.querySelector(
-      'annotation[encoding="application/x-tex"], annotation[encoding="application/tex"], annotation[encoding="TeX"]'
-    );
-    const annotationText = annotation?.textContent?.trim();
-    if (annotationText) return annotationText;
-
-    for (const attr of ['data-source', 'data-tex', 'data-latex', 'aria-label', 'title']) {
-      const value = el.getAttribute(attr)?.trim();
-      if (value) return value;
-    }
-
-    return '';
+  private isBlockMathElement(el: HTMLElement): boolean {
+    return el.classList.contains('math-block') || el.getAttribute('display') === 'true';
   }
 
   private buildContext(selection: Selection | null, selectedText: string): ChatSelectionContext {

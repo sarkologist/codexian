@@ -1,5 +1,6 @@
 import {
   escapeMathDelimitersForStreaming,
+  extractMarkdownMathSources,
   hasStreamingMathDelimiters,
 } from '@/utils/markdownMath';
 
@@ -70,4 +71,48 @@ describe('markdownMath', () => {
       expect(hasStreamingMathDelimiters('\\$5')).toBe(false);
     });
   });
+
+  describe('extractMarkdownMathSources', () => {
+    it('extracts inline and display math sources in order', () => {
+      const markdown = [
+        'Inline $x + y$',
+        '',
+        '$$',
+        'x^2 + y^2 = z^2',
+        '$$',
+        'Then $$z^2$$.',
+      ].join('\n');
+
+      expect(extractMarkdownMathSources(markdown)).toEqual([
+        '$x + y$',
+        '$$\nx^2 + y^2 = z^2\n$$',
+        '$$z^2$$',
+      ]);
+    });
+
+    it('ignores escaped dollars, code spans, fenced blocks, and html attributes', () => {
+      const markdown = [
+        'Cost is \\$5 and math is $x$.',
+        '`echo $PATH`',
+        '<span title="$ignored$">html $kept$</span>',
+        '```',
+        '$ignored$',
+        '```',
+        '~~~',
+        '$alsoIgnored$',
+        '~~~',
+      ].join('\n');
+
+      expect(extractMarkdownMathSources(markdown)).toEqual(['$x$', '$kept$']);
+    });
+
+    it('does not treat unclosed inline math as a source', () => {
+      expect(extractMarkdownMathSources('Before $x\nAfter $y$')).toEqual(['$y$']);
+    });
+
+    it('does not extract math from dollar delimiter runs longer than two', () => {
+      expect(extractMarkdownMathSources('Before $$$x^2$$$ after')).toEqual([]);
+    });
+  });
+
 });

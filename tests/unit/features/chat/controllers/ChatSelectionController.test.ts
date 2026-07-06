@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 
 import { ChatSelectionController } from '@/features/chat/controllers/ChatSelectionController';
+import { CLAUDIAN_MATH_SOURCE_ATTR } from '@/utils/markdownMath';
 
 function patchObsidianElement<T extends HTMLElement>(el: T): T {
   (el as any).addClass = (cls: string) => {
@@ -36,6 +37,23 @@ function createRange(startNode: Node, endNode: Node = startNode): Range {
   range.setStart(startNode, 0);
   range.setEnd(endNode, endNode.textContent?.length ?? 0);
   return range;
+}
+
+function createCopyEvent() {
+  const setData = jest.fn();
+  const event = new Event('copy', { cancelable: true }) as ClipboardEvent;
+  Object.defineProperty(event, 'clipboardData', {
+    value: { setData },
+  });
+  return { event, setData };
+}
+
+function createAnnotatedMath(source: string, className = 'math math-inline'): HTMLElement {
+  const mathWrapper = document.createElement('span');
+  mathWrapper.className = className;
+  mathWrapper.setAttribute(CLAUDIAN_MATH_SOURCE_ATTR, source);
+  mathWrapper.appendChild(document.createElement('mjx-container'));
+  return mathWrapper;
 }
 
 describe('ChatSelectionController', () => {
@@ -154,6 +172,114 @@ describe('ChatSelectionController', () => {
       role: 'assistant',
     });
     expect(indicatorEl.classList.contains('claudian-hidden')).toBe(false);
+  });
+
+  it('copies selected rendered math as annotated markdown source', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    const mathWrapper = createAnnotatedMath('$x^2$');
+    messageEl.appendChild(mathWrapper);
+
+    const range = document.createRange();
+    range.selectNode(mathWrapper);
+    selection = createSelection('', mathWrapper, mathWrapper, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '$x^2$');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('copies mixed text and rendered math with math source substituted', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const before = document.createTextNode('Value ');
+    const mathWrapper = createAnnotatedMath('$x^2$');
+    const after = document.createTextNode(' today');
+    messageEl.append(before, mathWrapper, after);
+
+    const range = document.createRange();
+    range.setStart(before, 0);
+    range.setEnd(after, after.textContent!.length);
+    selection = createSelection('Value  today', before, after, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', 'Value $x^2$ today');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('preserves indentation after newlines when selected content includes math', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const intro = document.createTextNode('Code:');
+    const pre = document.createElement('pre');
+    pre.textContent = '  const x = 1;\n    return x;';
+    const mathWrapper = createAnnotatedMath('$x$');
+    messageEl.append(intro, pre, mathWrapper);
+
+    const range = document.createRange();
+    range.setStart(intro, 0);
+    range.setEndAfter(mathWrapper);
+    selection = createSelection('Code:\n  const x = 1;\n    return x;', intro, mathWrapper, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith(
+      'text/plain',
+      'Code:\n  const x = 1;\n    return x;\n$x$'
+    );
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('copies MathJax fallback text when no Claudian source annotation exists', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    const mathJaxEl = document.createElement('mjx-container');
+    const assistiveEl = document.createElement('mjx-assistive-mml');
+    assistiveEl.textContent = 'Ωx1';
+    mathJaxEl.appendChild(assistiveEl);
+    messageEl.appendChild(mathJaxEl);
+
+    const range = document.createRange();
+    range.selectNode(mathJaxEl);
+    selection = createSelection('', mathJaxEl, mathJaxEl, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', 'Ωx1');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does not intercept copy for non-math chat selections', () => {
+    selection = createSelection('selected chat text', messageTextNode);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('does not intercept copy for selections outside the chat transcript', () => {
+    const outsideText = document.createTextNode('outside math-ish text');
+    document.body.appendChild(outsideText);
+    selection = createSelection('outside math-ish text', outsideText);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+    outsideText.remove();
   });
 
   it('captures chat selection on selectionchange without waiting for the timer', () => {
