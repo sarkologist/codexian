@@ -297,9 +297,13 @@ describe('MessageRenderer', () => {
     const headerEl = attachmentEl!.querySelector('.claudian-selection-context-header');
     expect(contentEl?.hasClass('claudian-hidden')).toBe(true);
     expect(headerEl?.getAttribute('aria-expanded')).toBe('false');
-    expect(attachmentEl!.querySelector('.claudian-selection-context-entry-meta')?.textContent).toBe(
-      'src/main.ts · lines 4-5'
-    );
+    const metaEl = attachmentEl!.querySelector('.claudian-selection-context-entry-meta');
+    expect(metaEl?.textContent).toContain('src/main.ts');
+    const lineLink = metaEl!.querySelector('.claudian-file-link');
+    expect(lineLink?.textContent).toBe('lines 4-5');
+    expect(lineLink?.getAttribute('data-href')).toBe('src/main.ts');
+    expect(lineLink?.getAttribute('data-line')).toBe('4');
+    expect(lineLink?.getAttribute('data-end-line')).toBe('5');
     expect(attachmentEl!.querySelector('.claudian-selection-context-body')?.textContent).toBe(selectedText);
   });
 
