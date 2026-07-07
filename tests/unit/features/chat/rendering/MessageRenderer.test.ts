@@ -16,6 +16,7 @@ import { renderStoredAsyncSubagent, renderStoredSubagent } from '@/features/chat
 import { renderStoredThinkingBlock } from '@/features/chat/rendering/ThinkingBlockRenderer';
 import { renderStoredToolCall } from '@/features/chat/rendering/ToolCallRenderer';
 import { renderStoredWriteEdit } from '@/features/chat/rendering/WriteEditRenderer';
+import { CLAUDIAN_MATH_SOURCE_ATTR } from '@/utils/markdownMath';
 
 jest.mock('@/features/chat/rendering/SubagentRenderer', () => ({
   renderStoredAsyncSubagent: jest.fn().mockReturnValue({ wrapperEl: {}, cleanup: jest.fn() }),
@@ -1453,6 +1454,86 @@ describe('MessageRenderer', () => {
       '',
       expect.anything()
     );
+  });
+
+  it('renderContent annotates rendered math nodes with original sources', async () => {
+    const { MarkdownRenderer } = await import('obsidian');
+    const { renderer } = createRenderer();
+    const el = createMockEl();
+    let inlineMath: any = null;
+    let displayMath: any = null;
+    const originalQuerySelectorAll = el.querySelectorAll;
+    el.querySelectorAll = jest.fn((selector: string) => {
+      if (selector.includes('mjx-container')) {
+        return [inlineMath, displayMath].filter(Boolean);
+      }
+      if (selector === 'pre') {
+        return [];
+      }
+      return originalQuerySelectorAll(selector);
+    });
+
+    (MarkdownRenderer.renderMarkdown as jest.Mock).mockImplementationOnce(
+      async (_md: string, container: any) => {
+        inlineMath = createMockEl('span');
+        inlineMath.addClass('math math-inline');
+        inlineMath.closest = (selector: string) => selector === '.math' ? inlineMath : null;
+        const inlineMathJax = createMockEl('mjx-container');
+        inlineMath.appendChild(inlineMathJax);
+        inlineMath.querySelectorAll = jest.fn((selector: string) =>
+          selector === 'mjx-container' ? [inlineMathJax] : []
+        );
+        container.appendChild(inlineMath);
+
+        displayMath = createMockEl('mjx-container');
+        displayMath.setAttribute('display', 'true');
+        displayMath.closest = () => null;
+        container.appendChild(displayMath);
+      }
+    );
+
+    await renderer.renderContent(el, [
+      'Inline $x + y$',
+      '',
+      '$$',
+      'z^2',
+      '$$',
+    ].join('\n'));
+
+    expect(inlineMath.getAttribute(CLAUDIAN_MATH_SOURCE_ATTR)).toBe('$x + y$');
+    expect(inlineMath.children[0].getAttribute(CLAUDIAN_MATH_SOURCE_ATTR)).toBe('$x + y$');
+    expect(displayMath.getAttribute(CLAUDIAN_MATH_SOURCE_ATTR)).toBe('$$\nz^2\n$$');
+  });
+
+  it('renderContent skips math source annotations when rendered math count mismatches source count', async () => {
+    const { MarkdownRenderer } = await import('obsidian');
+    const { renderer } = createRenderer();
+    const el = createMockEl();
+    let renderedMath: any = null;
+    const originalQuerySelectorAll = el.querySelectorAll;
+    el.querySelectorAll = jest.fn((selector: string) => {
+      if (selector.includes('mjx-container')) {
+        return renderedMath ? [renderedMath] : [];
+      }
+      if (selector === 'pre') {
+        return [];
+      }
+      return originalQuerySelectorAll(selector);
+    });
+
+    (MarkdownRenderer.renderMarkdown as jest.Mock).mockImplementationOnce(
+      async (_md: string, container: any) => {
+        renderedMath = createMockEl('span');
+        renderedMath.addClass('math math-inline');
+        renderedMath.closest = (selector: string) => selector === '.math' ? renderedMath : null;
+        renderedMath.querySelectorAll = jest.fn(() => []);
+        container.appendChild(renderedMath);
+      }
+    );
+
+    await renderer.renderContent(el, 'One $x$ and two $y$');
+
+    expect(renderedMath.getAttribute(CLAUDIAN_MATH_SOURCE_ATTR)).toBeNull();
   });
 
   // ============================================
