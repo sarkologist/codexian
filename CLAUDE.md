@@ -78,7 +78,7 @@ Tests mirror the `src/` layout under `tests/unit/` and `tests/integration/`.
 - **Commit after changes**: After making code, test, build, or policy changes, create a focused git commit before the final response unless the user explicitly says not to. Stage only files touched for the requested work and never include unrelated dirty worktree changes.
 - **Pull requests, not direct merges**: Never commit feature work directly to `main`. Branch off `main`, commit there, push, and open a PR with `gh`. `main` advances only by merging PRs.
 - Run `npm run typecheck && npm run lint && npm run test && npm run build` after editing.
-- **Check your work with Claude Code**: Before opening the PR, run the Claude Code CLI non-interactively for an independent code review of the branch diff, for example `git diff main...HEAD | claude -p "Code review the diff on stdin."`. Resolve real findings; treat the rest as a second opinion.
+- **Cross-provider PR review**: Before opening the PR, get an independent code review of the branch diff from the *other* provider — whichever agent did the work, the other one reviews. If Claude did the work, review with Codex: `git diff main...HEAD | codex exec "Code review the diff on stdin."`. If Codex did the work, review with Claude Code: `git diff main...HEAD | claude -p "Code review the diff on stdin."`. Resolve real findings; treat the rest as a second opinion. If the reviewing provider's CLI is unavailable (e.g. not authenticated), say so in the PR and fall back to a self-review.
 - After each commit, run `npm run install:local` to install the current build to vaults listed in `install-locations.local.txt`.
 - No `console.*` in production code.
 - Put non-committed notes, handoff files, and throwaway scripts in `.context/`.
