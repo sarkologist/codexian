@@ -53,6 +53,13 @@ export interface RenderContentOptions {
   deferMath?: boolean;
 }
 
+// A selection-context meta segment: plain text, or a link that jumps to a
+// file location. The delegated file-link handler on the messages container
+// navigates when clicked.
+type SelectionContextMetaPart =
+  | string
+  | { text: string; href: string; line: number; endLine?: number };
+
 export type RenderContentFn = (
   el: HTMLElement,
   markdown: string,
@@ -331,9 +338,24 @@ export class MessageRenderer {
       const entryEl = contentEl.createDiv({ cls: 'claudian-selection-context-entry' });
       entryEl.createDiv({ cls: 'claudian-selection-context-entry-title', text: entry.title });
       if (entry.meta.length > 0) {
-        entryEl.createDiv({
-          cls: 'claudian-selection-context-entry-meta',
-          text: entry.meta.join(' \u00B7 '),
+        const metaEl = entryEl.createDiv({ cls: 'claudian-selection-context-entry-meta' });
+        entry.meta.forEach((part, index) => {
+          if (index > 0) metaEl.appendText(' \u00B7 ');
+          if (typeof part === 'string') {
+            metaEl.appendText(part);
+            return;
+          }
+          const link = metaEl.createEl('a', {
+            cls: 'claudian-file-link internal-link',
+            text: part.text,
+            attr: {
+              href: part.href,
+              'data-href': part.href,
+              'data-line': String(part.line),
+              ...(part.endLine !== undefined ? { 'data-end-line': String(part.endLine) } : {}),
+            },
+          });
+          link.setAttribute('role', 'link');
         });
       }
       entryEl.createEl('pre', {
@@ -346,20 +368,27 @@ export class MessageRenderer {
   private getSelectionContextEntries(context: MessageSelectionContext): Array<{
     shortLabel: string;
     title: string;
-    meta: string[];
+    meta: SelectionContextMetaPart[];
     body: string;
   }> {
     const entries: Array<{
       shortLabel: string;
       title: string;
-      meta: string[];
+      meta: SelectionContextMetaPart[];
       body: string;
     }> = [];
 
     if (context.editor?.selectedText) {
-      const meta = [context.editor.notePath];
+      const meta: SelectionContextMetaPart[] = [context.editor.notePath];
       if (context.editor.startLine !== undefined && context.editor.lineCount) {
-        meta.push(`lines ${context.editor.startLine}-${context.editor.startLine + context.editor.lineCount - 1}`);
+        const startLine = context.editor.startLine;
+        const endLine = startLine + context.editor.lineCount - 1;
+        meta.push({
+          text: `lines ${startLine}-${endLine}`,
+          href: context.editor.notePath,
+          line: startLine,
+          endLine,
+        });
       } else if (context.editor.lineCount) {
         meta.push(`${context.editor.lineCount} ${context.editor.lineCount === 1 ? 'line' : 'lines'}`);
       }
