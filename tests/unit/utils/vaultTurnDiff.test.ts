@@ -3,6 +3,7 @@ import type { App } from 'obsidian';
 import {
   attachVaultTurnDiffsToMessages,
   buildVaultTurnDiff,
+  buildVaultTurnDiffFromToolCalls,
   captureVaultDiffSnapshot,
   collectVaultTurnDiffsFromMessages,
 } from '@/utils/vaultTurnDiff';
@@ -89,7 +90,7 @@ describe('vaultTurnDiff', () => {
     expect(buildVaultTurnDiff(before, after, 'diff-1')).toBeNull();
   });
 
-  it('captures added, modified, deleted, hidden, binary, oversized, and unreadable files', async () => {
+  it('captures added, modified, deleted, binary, oversized, and unreadable files while excluding hidden files', async () => {
     const adapter = new FakeVaultAdapter({
       'notes/a.md': 'one\nold\nthree',
       '.obsidian/app.json': '{}',
@@ -117,20 +118,75 @@ describe('vaultTurnDiff', () => {
     expect(diff).toEqual(expect.objectContaining({
       id: 'assistant-1',
       createdAt: 123,
-      fileCount: 6,
+      fileCount: 5,
     }));
+    // .obsidian/app.json is hidden, so its deletion is not tracked.
     expect(diff?.files.map(file => [file.path, file.kind, file.mode])).toEqual([
-      ['.obsidian/app.json', 'deleted', 'text'],
       ['bin.dat', 'modified', 'binary'],
       ['large.md', 'modified', 'oversized'],
       ['notes/a.md', 'modified', 'text'],
       ['notes/new.md', 'added', 'text'],
       ['secret.md', 'modified', 'unreadable'],
     ]);
-    expect(diff?.stats).toEqual({ added: 2, removed: 2 });
+    expect(diff?.stats).toEqual({ added: 2, removed: 1 });
     expect(diff?.files.find(file => file.path === 'notes/a.md')?.diffLines.map(line => line.text))
       .toEqual(['one', 'old', 'new', 'three']);
     expect(diff?.files.find(file => file.path === 'bin.dat')?.note).toBe('Binary file changed');
+  });
+
+  it('skips the whole-vault snapshot when the indexed file count exceeds the cap', async () => {
+    const adapter = new FakeVaultAdapter({ 'notes/a.md': 'x' });
+    const app = {
+      vault: {
+        adapter,
+        getFiles: () => new Array(50).fill({ path: 'f' }),
+      },
+    } as unknown as App;
+
+    expect(await captureVaultDiffSnapshot(app, { fileCountCap: 10 })).toBeNull();
+    expect(await captureVaultDiffSnapshot(app, { fileCountCap: 100 })).not.toBeNull();
+  });
+
+  it('builds a turn diff from tool-call diff data (touched files)', () => {
+    const toolCalls = [
+      {
+        diffData: {
+          filePath: 'wiki/a.md',
+          diffLines: [{ type: 'insert' as const, text: 'first', newLineNum: 1 }],
+          stats: { added: 1, removed: 0 },
+        },
+      },
+      {
+        diffData: {
+          filePath: 'wiki/a.md',
+          diffLines: [{ type: 'insert' as const, text: 'final', newLineNum: 2 }],
+          stats: { added: 1, removed: 0 },
+        },
+      },
+      {
+        diffData: {
+          filePath: 'log.md',
+          diffLines: [{ type: 'delete' as const, text: 'gone', oldLineNum: 1 }],
+          stats: { added: 0, removed: 1 },
+        },
+      },
+      { diffData: undefined },
+    ];
+
+    const diff = buildVaultTurnDiffFromToolCalls(toolCalls, 'assistant-2', 7);
+
+    expect(diff).toEqual(expect.objectContaining({ id: 'assistant-2', createdAt: 7, fileCount: 2 }));
+    expect(diff?.stats).toEqual({ added: 1, removed: 1 });
+    // Files sorted by path; the later edit of wiki/a.md supersedes the earlier one.
+    expect(diff?.files.map(file => file.path)).toEqual(['log.md', 'wiki/a.md']);
+    expect(diff?.files.find(file => file.path === 'wiki/a.md')?.diffLines).toEqual([
+      { type: 'insert', text: 'final', newLineNum: 2 },
+    ]);
+  });
+
+  it('returns null from tool-call builder when no tool touched a file', () => {
+    expect(buildVaultTurnDiffFromToolCalls([{ diffData: undefined }], 'x')).toBeNull();
+    expect(buildVaultTurnDiffFromToolCalls(undefined, 'x')).toBeNull();
   });
 
   it('attaches and collects persisted turn diffs by assistant message id', () => {

@@ -38,6 +38,7 @@ import { appendMarkdownSnippet } from '../../../utils/markdown';
 import { buildMessageSelectionContext } from '../../../utils/selectionContext';
 import {
   buildVaultTurnDiff,
+  buildVaultTurnDiffFromToolCalls,
   captureVaultDiffSnapshot,
   type VaultDiffSnapshot,
 } from '../../../utils/vaultTurnDiff';
@@ -590,7 +591,13 @@ export class InputController {
   ): Promise<void> {
     const afterSnapshot = await captureVaultDiffSnapshot(this.deps.plugin.app);
     const diffId = assistantMsg.assistantMessageId ?? assistantMsg.id;
-    const diff = buildVaultTurnDiff(beforeSnapshot, afterSnapshot, diffId);
+    // When the vault is too large to snapshot, either snapshot is null; fall
+    // back to building the diff from this turn's Write/Edit tool results so the
+    // Vault changes block still appears. When both snapshots exist, a null diff
+    // means nothing changed, so we keep the net-change semantics and skip.
+    const snapshotsAvailable = beforeSnapshot !== null && afterSnapshot !== null;
+    const diff = buildVaultTurnDiff(beforeSnapshot, afterSnapshot, diffId)
+      ?? (snapshotsAvailable ? null : buildVaultTurnDiffFromToolCalls(assistantMsg.toolCalls, diffId));
     if (!diff) return;
 
     assistantMsg.vaultDiffs = {

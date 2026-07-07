@@ -12,10 +12,19 @@ import { countLineChanges } from './diff';
 
 export const VAULT_TURN_DIFF_TEXT_SIZE_LIMIT = 1024 * 1024;
 
+// A whole-vault snapshot reads every file twice per turn. Past this many files
+// the walk is too expensive (and risks throwing) on large vaults, so we skip it
+// and let the tool-call fallback build the diff from touched files instead.
+export const VAULT_TURN_DIFF_FILE_COUNT_CAP = 20000;
+
 interface VaultAdapterLike {
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
   read(path: string): Promise<string>;
   stat?(path: string): Promise<{ mtime: number; size: number } | null>;
+}
+
+interface ToolCallDiffLike {
+  diffData?: { filePath: string; diffLines: DiffLine[]; stats: DiffStats };
 }
 
 interface VaultFileSnapshot {
@@ -32,14 +41,23 @@ export interface VaultDiffSnapshot {
 
 export async function captureVaultDiffSnapshot(
   app: App,
-  options: { textSizeLimit?: number } = {},
+  options: { textSizeLimit?: number; fileCountCap?: number } = {},
 ): Promise<VaultDiffSnapshot | null> {
   try {
-    const adapter = app.vault.adapter as unknown as VaultAdapterLike;
     const textSizeLimit = options.textSizeLimit ?? VAULT_TURN_DIFF_TEXT_SIZE_LIMIT;
-    const files = new Map<string, VaultFileSnapshot>();
+    const fileCountCap = options.fileCountCap ?? VAULT_TURN_DIFF_FILE_COUNT_CAP;
 
-    for (const filePath of await listVaultFiles(adapter)) {
+    // Cheap over-cap short-circuit: Obsidian's file index is in-memory and
+    // already excludes hidden folders, so a huge vault bails before any I/O.
+    const indexedCount = getIndexedFileCount(app);
+    if (indexedCount !== null && indexedCount > fileCountCap) return null;
+
+    const adapter = app.vault.adapter as unknown as VaultAdapterLike;
+    const paths = await listVaultFiles(adapter, '', fileCountCap);
+    if (paths.length > fileCountCap) return null;
+
+    const files = new Map<string, VaultFileSnapshot>();
+    for (const filePath of paths) {
       files.set(filePath, await readFileSnapshot(adapter, filePath, textSizeLimit));
     }
 
@@ -47,6 +65,61 @@ export async function captureVaultDiffSnapshot(
   } catch {
     return null;
   }
+}
+
+function getIndexedFileCount(app: App): number | null {
+  const getFiles = (app.vault as { getFiles?: () => unknown[] }).getFiles;
+  if (typeof getFiles !== 'function') return null;
+  try {
+    return getFiles.call(app.vault).length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Builds a turn diff from the turn's Write/Edit tool results instead of a
+ * whole-vault snapshot. Used when the vault is too large to snapshot; each
+ * touched file is diffed from its final edit's pre-computed patch, so line
+ * numbers stay coherent for jump-to-file even when a file is edited repeatedly.
+ */
+export function buildVaultTurnDiffFromToolCalls(
+  toolCalls: ToolCallDiffLike[] | undefined,
+  diffId: string,
+  createdAt = Date.now(),
+): VaultTurnDiff | null {
+  if (!toolCalls || toolCalls.length === 0) return null;
+
+  const byPath = new Map<string, { diffLines: DiffLine[]; stats: DiffStats }>();
+  for (const call of toolCalls) {
+    const data = call.diffData;
+    if (!data || data.diffLines.length === 0) continue;
+    // Later edits supersede earlier ones so the shown diff matches the file's
+    // final state (and its line numbers point at that state).
+    byPath.set(data.filePath, { diffLines: data.diffLines, stats: data.stats });
+  }
+
+  if (byPath.size === 0) return null;
+
+  const files: VaultTurnDiffFile[] = [...byPath.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([path, entry]) => ({
+      path,
+      kind: 'modified' as VaultTurnDiffFileKind,
+      mode: 'text' as VaultTurnDiffFileMode,
+      diffLines: entry.diffLines,
+      stats: entry.stats,
+    }));
+
+  const stats = files.reduce<DiffStats>(
+    (acc, file) => ({
+      added: acc.added + file.stats.added,
+      removed: acc.removed + file.stats.removed,
+    }),
+    { added: 0, removed: 0 },
+  );
+
+  return { id: diffId, createdAt, files, stats, fileCount: files.length };
 }
 
 export function buildVaultTurnDiff(
@@ -148,15 +221,34 @@ export function collectVaultTurnDiffsFromMessages(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-async function listVaultFiles(adapter: VaultAdapterLike, folder = ''): Promise<string[]> {
+async function listVaultFiles(
+  adapter: VaultAdapterLike,
+  folder = '',
+  cap = Number.POSITIVE_INFINITY,
+  acc: string[] = [],
+): Promise<string[]> {
   const listing = await adapter.list(folder);
-  const files = [...listing.files];
 
-  for (const childFolder of listing.folders) {
-    files.push(...await listVaultFiles(adapter, childFolder));
+  for (const filePath of listing.files) {
+    if (isHiddenPath(filePath)) continue;
+    acc.push(filePath);
+    if (acc.length > cap) return acc;
   }
 
-  return files.sort();
+  for (const childFolder of listing.folders) {
+    if (isHiddenPath(childFolder)) continue;
+    await listVaultFiles(adapter, childFolder, cap, acc);
+    if (acc.length > cap) return acc;
+  }
+
+  return acc;
+}
+
+// Skip dotfiles/dotfolders (.git, .obsidian, .claude, .trash, …): they are not
+// vault content and dominate the file count on repo-backed vaults.
+function isHiddenPath(path: string): boolean {
+  const name = path.split('/').pop() ?? path;
+  return name.startsWith('.');
 }
 
 async function readFileSnapshot(
