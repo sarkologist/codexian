@@ -53,6 +53,24 @@ describe('systemPrompt', () => {
       expect(prompt).not.toContain('### Skills');
     });
 
+    it('should encourage asking the user via multiple-choice questions', () => {
+      const prompt = buildSystemPrompt();
+
+      expect(prompt).toContain('## Asking the User');
+      expect(prompt).toContain('multiple-choice');
+      // Guard rails: only when genuinely blocked, not for approval or when a default exists.
+      expect(prompt).toContain('sensible default');
+    });
+
+    it('should keep the ask-user guidance provider-neutral (no hardcoded tool name)', () => {
+      const prompt = buildSystemPrompt();
+
+      // The prompt is shared across providers whose tools differ (Claude: AskUserQuestion,
+      // Codex: request_user_input). Naming a specific tool would be wrong for the others.
+      expect(prompt).not.toContain('AskUserQuestion');
+      expect(prompt).not.toContain('request_user_input');
+    });
+
   });
 
   describe('userName in system prompt', () => {
