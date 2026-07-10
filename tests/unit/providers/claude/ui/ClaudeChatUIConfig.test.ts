@@ -15,6 +15,7 @@ describe('claudeChatUIConfig', () => {
         'haiku',
         'sonnet',
         'opus',
+        'claude-fable-5',
         'claude-opus-4-6',
         'claude-opus-4-6[1m]',
       ]);
@@ -45,6 +46,7 @@ describe('claudeChatUIConfig', () => {
         'haiku',
         'sonnet',
         'opus',
+        'claude-fable-5',
         'claude-opus-4-6',
       ]);
     });
@@ -94,6 +96,12 @@ describe('claudeChatUIConfig', () => {
 
     it('keeps xhigh on supported opus models', () => {
       const options = claudeChatUIConfig.getReasoningOptions('claude-opus-4-7', {});
+
+      expect(options.map(option => option.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    });
+
+    it('keeps xhigh on the Fable frontier model', () => {
+      const options = claudeChatUIConfig.getReasoningOptions('claude-fable-5', {});
 
       expect(options.map(option => option.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     });

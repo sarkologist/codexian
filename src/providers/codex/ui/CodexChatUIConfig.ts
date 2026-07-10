@@ -9,13 +9,14 @@ import { OPENAI_PROVIDER_ICON } from '../../../shared/icons';
 import { getCodexModelOptions } from '../modelOptions';
 import { applyCodexModelDefaults } from '../settings';
 import {
+  DEFAULT_CODEX_MODEL,
   DEFAULT_CODEX_MODEL_SET,
-  DEFAULT_CODEX_PRIMARY_MODEL,
   FAST_TIER_CODEX_DESCRIPTION,
   FAST_TIER_CODEX_MODEL,
 } from '../types/models';
 
 const EFFORT_LEVELS: ProviderReasoningOption[] = [
+  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -91,7 +92,7 @@ export const codexChatUIConfig: ProviderChatUIConfig = {
       return model;
     }
 
-    return DEFAULT_CODEX_PRIMARY_MODEL;
+    return DEFAULT_CODEX_MODEL;
   },
 
   getCustomModelIds(envVars: Record<string, string>): Set<string> {

@@ -5,12 +5,19 @@
 /** Model identifier (string to support custom models via environment variables). */
 export type ClaudeModel = string;
 
+/**
+ * Frontier model. Uses the full API model ID because Claude Code exposes no
+ * short alias (like `opus`/`sonnet`) for it, and it always runs at 1M context.
+ */
+export const CLAUDE_FABLE_MODEL: ClaudeModel = 'claude-fable-5';
+
 export const DEFAULT_CLAUDE_MODELS: { value: ClaudeModel; label: string; description: string }[] = [
   { value: 'haiku', label: 'Haiku', description: 'Fast and efficient' },
   { value: 'sonnet', label: 'Sonnet', description: 'Balanced performance' },
   { value: 'sonnet[1m]', label: 'Sonnet 1M', description: 'Balanced performance (1M context window)' },
   { value: 'opus', label: 'Opus', description: 'Most capable' },
   { value: 'opus[1m]', label: 'Opus 1M', description: 'Most capable (1M context window)' },
+  { value: CLAUDE_FABLE_MODEL, label: 'Fable', description: 'Frontier reasoning (1M context window)' },
 ];
 
 export type ThinkingBudget = 'off' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -41,6 +48,7 @@ export const DEFAULT_EFFORT_LEVEL: Record<string, EffortLevel> = {
   'sonnet[1m]': 'high',
   'opus': 'high',
   'opus[1m]': 'high',
+  [CLAUDE_FABLE_MODEL]: 'high',
 };
 
 /** Default thinking budget per model tier. */
@@ -50,6 +58,7 @@ export const DEFAULT_THINKING_BUDGET: Record<string, ThinkingBudget> = {
   'sonnet[1m]': 'low',
   'opus': 'medium',
   'opus[1m]': 'medium',
+  [CLAUDE_FABLE_MODEL]: 'medium',
 };
 
 const ONE_M_SUFFIX = '[1m]';
@@ -61,6 +70,11 @@ function normalizeModelId(model: string): string {
 
 function has1MContextSuffix(model: string): boolean {
   return normalizeModelId(model).endsWith(ONE_M_SUFFIX);
+}
+
+/** Models that always run at 1M context regardless of a `[1m]` suffix (Fable/Mythos family). */
+function isAlways1MContextModel(model: string): boolean {
+  return /claude-(fable|mythos)-/.test(normalizeModelId(model));
 }
 
 function isBuiltInFamilyVariant(model: string, family: 'sonnet' | 'opus'): boolean {
@@ -97,7 +111,7 @@ function resolveCustomContextLimit(
 export function isAdaptiveThinkingModel(model: string): boolean {
   const normalized = normalizeModelId(model);
   if (DEFAULT_MODEL_VALUES.has(normalized)) return true;
-  return /claude-(haiku|sonnet|opus)-/.test(normalized);
+  return /claude-(haiku|sonnet|opus|fable|mythos)-/.test(normalized);
 }
 
 export function isDefaultClaudeModel(model: string): boolean {
@@ -105,12 +119,13 @@ export function isDefaultClaudeModel(model: string): boolean {
 }
 
 /**
- * Whether the model supports the `xhigh` effort level. Opus 4.7+ only — the SDK
- * silently falls back to `high` on other models.
+ * Whether the model supports the `xhigh` effort level. Opus 4.7+ and the
+ * Fable/Mythos family only — the SDK silently falls back to `high` on others.
  */
 export function supportsXHighEffort(model: string): boolean {
   const normalized = normalizeModelId(model);
   if (isBuiltInFamilyVariant(normalized, 'opus')) return true;
+  if (/claude-(fable|mythos)-/.test(normalized)) return true;
   return /claude-opus-(4-[7-9]|[5-9])/.test(normalized);
 }
 
@@ -201,7 +216,7 @@ export function getContextWindowSize(
     return customLimit;
   }
 
-  if (has1MContextSuffix(model)) {
+  if (has1MContextSuffix(model) || isAlways1MContextModel(model)) {
     return CONTEXT_WINDOW_1M;
   }
 

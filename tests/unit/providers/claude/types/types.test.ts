@@ -626,27 +626,44 @@ describe('types.ts', () => {
         expect(getContextWindowSize('opus')).toBe(CONTEXT_WINDOW_STANDARD);
         expect(getContextWindowSize('sonnet')).toBe(CONTEXT_WINDOW_STANDARD);
       });
+
+      it('should return 1M for the Fable/Mythos family without a [1m] suffix', () => {
+        expect(getContextWindowSize('claude-fable-5')).toBe(CONTEXT_WINDOW_1M);
+        expect(getContextWindowSize('claude-mythos-5')).toBe(CONTEXT_WINDOW_1M);
+        expect(getContextWindowSize('anthropic/claude-fable-5')).toBe(CONTEXT_WINDOW_1M);
+      });
+
+      it('should still prefer custom limits over Fable 1M default', () => {
+        expect(getContextWindowSize('claude-fable-5', { 'claude-fable-5': 500000 })).toBe(500000);
+      });
     });
 
     describe('filterVisibleModelOptions', () => {
       it('should hide 1M variants when toggles are disabled', () => {
         const models = filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, false, false).map((model) => model.value);
-        expect(models).toEqual(['haiku', 'sonnet', 'opus']);
+        expect(models).toEqual(['haiku', 'sonnet', 'opus', 'claude-fable-5']);
       });
 
       it('should swap in 1M variants when toggles are enabled', () => {
         const models = filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, true, true).map((model) => model.value);
-        expect(models).toEqual(['haiku', 'sonnet[1m]', 'opus[1m]']);
+        expect(models).toEqual(['haiku', 'sonnet[1m]', 'opus[1m]', 'claude-fable-5']);
       });
 
       it('should swap only opus when enableOpus1M is true and enableSonnet1M is false', () => {
         const models = filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, true, false).map((model) => model.value);
-        expect(models).toEqual(['haiku', 'sonnet', 'opus[1m]']);
+        expect(models).toEqual(['haiku', 'sonnet', 'opus[1m]', 'claude-fable-5']);
       });
 
       it('should swap only sonnet when enableSonnet1M is true and enableOpus1M is false', () => {
         const models = filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, false, true).map((model) => model.value);
-        expect(models).toEqual(['haiku', 'sonnet[1m]', 'opus']);
+        expect(models).toEqual(['haiku', 'sonnet[1m]', 'opus', 'claude-fable-5']);
+      });
+
+      it('should always keep the Fable frontier model regardless of 1M toggles', () => {
+        expect(filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, false, false).map((m) => m.value))
+          .toContain('claude-fable-5');
+        expect(filterVisibleModelOptions(DEFAULT_CLAUDE_MODELS, true, true).map((m) => m.value))
+          .toContain('claude-fable-5');
       });
     });
 
@@ -687,6 +704,12 @@ describe('types.ts', () => {
       expect(isAdaptiveThinkingModel('claude-haiku-4-5-20251001')).toBe(true);
     });
 
+    it('should return true for the Fable/Mythos family', () => {
+      expect(isAdaptiveThinkingModel('claude-fable-5')).toBe(true);
+      expect(isAdaptiveThinkingModel('claude-mythos-5')).toBe(true);
+      expect(isAdaptiveThinkingModel('anthropic/claude-fable-5')).toBe(true);
+    });
+
     it('should return false for custom/unknown models', () => {
       expect(isAdaptiveThinkingModel('custom-model')).toBe(false);
       expect(isAdaptiveThinkingModel('gpt-4')).toBe(false);
@@ -719,6 +742,12 @@ describe('types.ts', () => {
       expect(supportsXHighEffort('opus[1M]')).toBe(true);
       expect(supportsXHighEffort('claude-opus-4-7')).toBe(true);
       expect(supportsXHighEffort('claude-opus-5')).toBe(true);
+    });
+
+    it('returns true for the Fable/Mythos family', () => {
+      expect(supportsXHighEffort('claude-fable-5')).toBe(true);
+      expect(supportsXHighEffort('claude-mythos-5')).toBe(true);
+      expect(supportsXHighEffort('anthropic/claude-fable-5')).toBe(true);
     });
 
     it('returns false for non-opus models and older opus ids', () => {

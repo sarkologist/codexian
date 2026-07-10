@@ -1,6 +1,6 @@
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type ClaudianPlugin from '../../../main';
-import { DEFAULT_CODEX_PRIMARY_MODEL } from '../types/models';
+import { DEFAULT_CODEX_MODEL } from '../types/models';
 import { CodexAppServerProcess } from './CodexAppServerProcess';
 import { resolveCodexAppServerLaunchSpec } from './codexAppServerSupport';
 import type {
@@ -156,7 +156,7 @@ export class CodexAuxQueryRunner {
       this.plugin.settings,
       'codex',
     );
-    return (providerSettings.model) ?? DEFAULT_CODEX_PRIMARY_MODEL;
+    return (providerSettings.model) ?? DEFAULT_CODEX_MODEL;
   }
 
   private async startProcess(): Promise<void> {
