@@ -132,7 +132,7 @@ export class ChatSelectionController {
     if (!selection || selection.rangeCount === 0) return null;
 
     const parts: string[] = [];
-    let replacedMath = false;
+    let shouldOverride = false;
 
     for (let index = 0; index < selection.rangeCount; index += 1) {
       const range = selection.getRangeAt(index);
@@ -147,13 +147,57 @@ export class ChatSelectionController {
       }
 
       if (this.replaceMathElementsWithSourceText(container)) {
-        replacedMath = true;
+        shouldOverride = true;
+      }
+      // Dragging across list items clones bare <li> nodes without their
+      // <ul>/<ol> wrapper; re-wrap so marker type and numbering survive.
+      this.wrapBareListItems(container, range);
+      if (container.querySelector('ul, ol, li')) {
+        shouldOverride = true;
       }
       parts.push(this.extractClipboardText(container));
     }
 
-    if (!replacedMath) return null;
+    // Native copy drops list markers, so only override for math or lists;
+    // otherwise let the browser serialize the selection.
+    if (!shouldOverride) return null;
     return this.normalizeClipboardText(parts.join('\n')) || null;
+  }
+
+  private wrapBareListItems(container: HTMLElement, range: Range): void {
+    const bareItems = Array.from(container.children).filter(el => el.tagName === 'LI');
+    if (bareItems.length === 0) return;
+
+    // Bare top-level <li> clones are direct children of the range's common
+    // ancestor, so that list — not the range start, which may sit in a
+    // differently-typed nested list — defines the wrapper type and numbering.
+    const sourceList = this.closestListElement(range.commonAncestorContainer)
+      ?? this.closestListElement(range.startContainer);
+    const ordered = sourceList?.tagName === 'OL';
+    const wrapper = container.ownerDocument.createElement(ordered ? 'ol' : 'ul');
+
+    if (ordered && sourceList) {
+      const startIndex = this.firstSelectedListItemIndex(range, sourceList);
+      if (startIndex > 1) wrapper.setAttribute('start', String(startIndex));
+    }
+
+    container.insertBefore(wrapper, bareItems[0]);
+    for (const item of bareItems) {
+      wrapper.appendChild(item);
+    }
+  }
+
+  private closestListElement(node: Node | null): HTMLElement | null {
+    const el = node ? this.elementFromNode(node) : null;
+    return el?.closest<HTMLElement>('ul, ol') ?? null;
+  }
+
+  private firstSelectedListItemIndex(range: Range, list: HTMLElement): number {
+    const start = range.startContainer;
+    const items = Array.from(list.children).filter(el => el.tagName === 'LI');
+    const position = items.findIndex(item => item === start || item.contains(start));
+    const base = Number.parseInt(list.getAttribute('start') ?? '', 10);
+    return (Number.isFinite(base) ? base : 1) + Math.max(0, position);
   }
 
   private replaceMathElementsWithSourceText(container: HTMLElement): boolean {
@@ -176,7 +220,16 @@ export class ChatSelectionController {
 
   private extractClipboardText(container: HTMLElement): string {
     let text = '';
+    // Suppresses the line break a block child would otherwise insert right
+    // after a list marker, keeping loose-list content on the marker's line.
+    let suppressLeadingBreak = false;
+    const listStack: Array<{ ordered: boolean; index: number }> = [];
+
     const appendLineBreak = () => {
+      if (suppressLeadingBreak) {
+        suppressLeadingBreak = false;
+        return;
+      }
       if (text && !text.endsWith('\n')) {
         text += '\n';
       }
@@ -184,13 +237,36 @@ export class ChatSelectionController {
 
     const walk = (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE) {
-        text += node.nodeValue ?? '';
+        const value = node.nodeValue ?? '';
+        text += value;
+        if (value.trim()) suppressLeadingBreak = false;
         return;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return;
 
       const el = node as Element;
       if (this.shouldSkipClipboardElement(el)) return;
+
+      const tag = el.tagName;
+      if (tag === 'UL' || tag === 'OL') {
+        const ordered = tag === 'OL';
+        const start = ordered ? Number.parseInt(el.getAttribute('start') ?? '', 10) : NaN;
+        listStack.push({ ordered, index: Number.isFinite(start) ? start - 1 : 0 });
+        appendLineBreak();
+        el.childNodes.forEach(walk);
+        appendLineBreak();
+        listStack.pop();
+        return;
+      }
+
+      if (tag === 'LI') {
+        appendLineBreak();
+        text += this.listItemMarker(listStack);
+        suppressLeadingBreak = true;
+        el.childNodes.forEach(walk);
+        appendLineBreak();
+        return;
+      }
 
       const isBlock = this.isClipboardBlockElement(el);
       if (isBlock) appendLineBreak();
@@ -200,6 +276,15 @@ export class ChatSelectionController {
 
     container.childNodes.forEach(walk);
     return text;
+  }
+
+  private listItemMarker(listStack: Array<{ ordered: boolean; index: number }>): string {
+    const indent = '  '.repeat(Math.max(0, listStack.length - 1));
+    const frame = listStack[listStack.length - 1];
+    if (!frame) return `${indent}- `;
+
+    frame.index += 1;
+    return frame.ordered ? `${indent}${frame.index}. ` : `${indent}- `;
   }
 
   private shouldSkipClipboardElement(el: Element): boolean {
