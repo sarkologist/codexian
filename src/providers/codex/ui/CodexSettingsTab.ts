@@ -11,7 +11,7 @@ import { getCodexWorkspaceServices } from '../app/CodexWorkspaceServices';
 import { parseConfiguredCustomModelIds, resolveCodexModelSelection } from '../modelOptions';
 import { isWindowsStyleCliReference } from '../runtime/CodexBinaryLocator';
 import { getCodexProviderSettings, updateCodexProviderSettings } from '../settings';
-import { DEFAULT_CODEX_PRIMARY_MODEL } from '../types/models';
+import { DEFAULT_CODEX_MODEL } from '../types/models';
 import { CodexSkillSettings } from './CodexSkillSettings';
 import { CodexSubagentSettings } from './CodexSubagentSettings';
 
@@ -424,7 +424,7 @@ export const codexSettingsTabRenderer: ProviderSettingsTabRenderer = {
       heading: t('settings.environment'),
       name: 'Codex environment',
       desc: 'Codex-owned runtime variables only. Use this for OPENAI_* and CODEX_* settings. If Codex auto-detection needs help, add its install directory to shared PATH instead of this provider section.',
-      placeholder: `OPENAI_API_KEY=your-key\nOPENAI_BASE_URL=https://api.openai.com/v1\nOPENAI_MODEL=${DEFAULT_CODEX_PRIMARY_MODEL}\nCODEX_SANDBOX=workspace-write`,
+      placeholder: `OPENAI_API_KEY=your-key\nOPENAI_BASE_URL=https://api.openai.com/v1\nOPENAI_MODEL=${DEFAULT_CODEX_MODEL}\nCODEX_SANDBOX=workspace-write`,
       renderCustomContextLimits: (target) => context.renderCustomContextLimits(target, 'codex'),
     });
   },

@@ -3,11 +3,12 @@ import { Modal, Notice, setIcon, Setting } from 'obsidian';
 
 import { confirmDelete } from '../../../shared/modals/ConfirmModal';
 import type { CodexSubagentStorage } from '../storage/CodexSubagentStorage';
-import { DEFAULT_CODEX_PRIMARY_MODEL } from '../types/models';
+import { DEFAULT_CODEX_MODEL } from '../types/models';
 import type { CodexSubagentDefinition } from '../types/subagent';
 
 const REASONING_EFFORT_OPTIONS = [
   { value: '', label: 'Inherit' },
+  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -138,7 +139,7 @@ class CodexSubagentModal extends Modal {
       .addText(text => {
         this._modelInput = text.inputEl;
         text.setValue(this.existing?.model ?? '')
-          .setPlaceholder(DEFAULT_CODEX_PRIMARY_MODEL);
+          .setPlaceholder(DEFAULT_CODEX_MODEL);
       });
 
     new Setting(details)

@@ -2,9 +2,9 @@ import { getRuntimeEnvironmentVariables } from '../../core/providers/providerEnv
 import type { ProviderUIOption } from '../../core/providers/types';
 import { getCodexProviderSettings } from './settings';
 import {
+  DEFAULT_CODEX_MODEL,
   DEFAULT_CODEX_MODEL_SET,
   DEFAULT_CODEX_MODELS,
-  DEFAULT_CODEX_PRIMARY_MODEL,
   formatCodexModelLabel,
 } from './types/models';
 
@@ -80,5 +80,5 @@ export function resolveCodexModelSelection(
     return currentModel;
   }
 
-  return modelOptions[0]?.value ?? DEFAULT_CODEX_PRIMARY_MODEL;
+  return modelOptions[0]?.value ?? DEFAULT_CODEX_MODEL;
 }

@@ -4,7 +4,7 @@ import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import type { Conversation } from '@/core/types';
 import { DEFAULT_CLAUDE_PROVIDER_SETTINGS } from '@/providers/claude/settings';
-import { DEFAULT_CODEX_PRIMARY_MODEL } from '@/providers/codex/types/models';
+import { DEFAULT_CODEX_MODEL, DEFAULT_CODEX_PRIMARY_MODEL } from '@/providers/codex/types/models';
 
 describe('ProviderSettingsCoordinator', () => {
   describe('normalizeProviderSelection', () => {
@@ -100,8 +100,8 @@ describe('ProviderSettingsCoordinator', () => {
       };
 
       expect(ProviderSettingsCoordinator.normalizeAllModelVariants(settings)).toBe(true);
-      expect(settings.model).toBe(DEFAULT_CODEX_PRIMARY_MODEL);
-      expect(settings.savedProviderModel).toEqual({ codex: DEFAULT_CODEX_PRIMARY_MODEL });
+      expect(settings.model).toBe(DEFAULT_CODEX_MODEL);
+      expect(settings.savedProviderModel).toEqual({ codex: DEFAULT_CODEX_MODEL });
     });
   });
 
@@ -204,7 +204,7 @@ describe('ProviderSettingsCoordinator', () => {
 
       const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settings, 'codex');
 
-      expect(snapshot.model).toBe(DEFAULT_CODEX_PRIMARY_MODEL);
+      expect(snapshot.model).toBe(DEFAULT_CODEX_MODEL);
       expect(snapshot.serviceTier).toBe('fast');
     });
 
@@ -345,7 +345,7 @@ describe('ProviderSettingsCoordinator', () => {
 
       ProviderSettingsCoordinator.projectProviderState(settings, 'codex');
 
-      expect(settings.model).toBe('gpt-5.4-mini');
+      expect(settings.model).toBe('gpt-5.6-sol');
       expect(settings.effortLevel).toBe('medium');
       expect(settings.serviceTier).toBe('default');
     });
