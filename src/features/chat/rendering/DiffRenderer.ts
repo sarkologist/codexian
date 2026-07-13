@@ -23,53 +23,89 @@ export function renderDiffStats(statsEl: HTMLElement, stats: DiffStats): void {
 export function splitIntoHunks(diffLines: DiffLine[], contextLines = 3): DiffHunk[] {
   if (diffLines.length === 0) return [];
 
-  // Find indices of all changed lines
-  const changedIndices: number[] = [];
+  // A context-trimmed diff drops the unchanged span between two distant edits,
+  // so the surviving context lines are array-adjacent but discontinuous in line
+  // numbers. Split on those jumps first, then hunk each segment on its own so
+  // separate edits never merge into one block by raw array adjacency.
+  const hunks: DiffHunk[] = [];
+  let segStart = 0;
+  for (const boundary of [...lineNumberGaps(diffLines), diffLines.length]) {
+    collectSegmentHunks(diffLines, segStart, boundary, contextLines, hunks);
+    segStart = boundary;
+  }
+  return hunks;
+}
+
+/**
+ * Indices at which the diff skipped lines — a jump in old or new line numbers
+ * between consecutive lines. Trimming the unchanged gap between distant edits
+ * produces exactly these jumps.
+ */
+function lineNumberGaps(diffLines: DiffLine[]): number[] {
+  const gaps: number[] = [];
+  let expectedOld: number | undefined;
+  let expectedNew: number | undefined;
+
   for (let i = 0; i < diffLines.length; i++) {
-    if (diffLines[i].type !== 'equal') {
-      changedIndices.push(i);
+    const line = diffLines[i];
+    let jumped = false;
+    if (line.oldLineNum !== undefined) {
+      if (expectedOld !== undefined && line.oldLineNum > expectedOld) jumped = true;
+      expectedOld = line.oldLineNum + 1;
     }
+    if (line.newLineNum !== undefined) {
+      if (expectedNew !== undefined && line.newLineNum > expectedNew) jumped = true;
+      expectedNew = line.newLineNum + 1;
+    }
+    if (jumped && i > 0) gaps.push(i);
   }
 
-  // If no changes, return empty
-  if (changedIndices.length === 0) return [];
+  return gaps;
+}
 
-  // Group changed lines into ranges with context
+function collectSegmentHunks(
+  diffLines: DiffLine[],
+  segStart: number,
+  segEnd: number,
+  contextLines: number,
+  out: DiffHunk[],
+): void {
+  // Group changed lines in [segStart, segEnd) into ranges with context.
   const ranges: Array<{ start: number; end: number }> = [];
 
-  for (const idx of changedIndices) {
-    const start = Math.max(0, idx - contextLines);
-    const end = Math.min(diffLines.length - 1, idx + contextLines);
+  for (let idx = segStart; idx < segEnd; idx++) {
+    if (diffLines[idx].type === 'equal') continue;
+
+    const start = Math.max(segStart, idx - contextLines);
+    const end = Math.min(segEnd - 1, idx + contextLines);
 
     // Merge with previous range if overlapping or adjacent
     if (ranges.length > 0 && start <= ranges[ranges.length - 1].end + 1) {
-      ranges[ranges.length - 1].end = end;
+      ranges[ranges.length - 1].end = Math.max(ranges[ranges.length - 1].end, end);
     } else {
       ranges.push({ start, end });
     }
   }
 
-  // Convert ranges to hunks
-  const hunks: DiffHunk[] = [];
-
   for (const range of ranges) {
     const lines = diffLines.slice(range.start, range.end + 1);
-
-    // Find the starting line numbers for this hunk
-    let oldStart = 1;
-    let newStart = 1;
-
-    // Count lines before this range
-    for (let i = 0; i < range.start; i++) {
-      const line = diffLines[i];
-      if (line.type === 'equal' || line.type === 'delete') oldStart++;
-      if (line.type === 'equal' || line.type === 'insert') newStart++;
-    }
-
-    hunks.push({ lines, oldStart, newStart });
+    // Read starts from the hunk's own absolute line numbers rather than counting
+    // preceding array entries: after a trimmed gap the array no longer mirrors
+    // file position, so counting would report the wrong start for later hunks.
+    out.push({
+      lines,
+      oldStart: firstLineNumber(lines, 'oldLineNum'),
+      newStart: firstLineNumber(lines, 'newLineNum'),
+    });
   }
+}
 
-  return hunks;
+function firstLineNumber(lines: DiffLine[], key: 'oldLineNum' | 'newLineNum'): number {
+  for (const line of lines) {
+    const value = line[key];
+    if (value !== undefined) return value;
+  }
+  return 1;
 }
 
 /** Max lines to render for all-inserts diffs (new file creation). */

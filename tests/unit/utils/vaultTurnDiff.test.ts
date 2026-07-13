@@ -134,6 +134,58 @@ describe('vaultTurnDiff', () => {
     expect(diff?.files.find(file => file.path === 'bin.dat')?.note).toBe('Binary file changed');
   });
 
+  it('localises distant edits into separate regions with unchanged context between them dropped', async () => {
+    const before = Array.from({ length: 20 }, (_, i) => `L${i + 1}`).join('\n');
+    const adapter = new FakeVaultAdapter({ 'notes/a.md': before });
+    const app = createApp(adapter);
+
+    const beforeSnap = await captureVaultDiffSnapshot(app);
+    // Two edits far apart: line 2 and line 18.
+    const afterLines = before.split('\n');
+    afterLines[1] = 'L2x';
+    afterLines[17] = 'L18x';
+    adapter.set('notes/a.md', afterLines.join('\n'));
+    const afterSnap = await captureVaultDiffSnapshot(app);
+
+    const diff = buildVaultTurnDiff(beforeSnap, afterSnap, 'diff-multi');
+    const file = diff?.files.find(f => f.path === 'notes/a.md');
+    const lines = file?.diffLines ?? [];
+
+    // Both edits are present as delete+insert pairs.
+    expect(lines).toEqual(expect.arrayContaining([
+      { type: 'delete', text: 'L2', oldLineNum: 2 },
+      { type: 'insert', text: 'L2x', newLineNum: 2 },
+      { type: 'delete', text: 'L18', oldLineNum: 18 },
+      { type: 'insert', text: 'L18x', newLineNum: 18 },
+    ]));
+    expect(file?.stats).toEqual({ added: 2, removed: 2 });
+
+    // The unchanged middle (roughly lines 6..14) is dropped, so the equal
+    // context lines are discontinuous — that gap is what lets the renderer
+    // split this into two localised hunks.
+    const equalOldNums = lines.filter(l => l.type === 'equal').map(l => l.oldLineNum);
+    expect(equalOldNums).toContain(5); // trailing context of the first edit
+    expect(equalOldNums).toContain(15); // leading context of the second edit
+    expect(equalOldNums.some(n => n !== undefined && n >= 7 && n <= 13)).toBe(false);
+  });
+
+  it('keeps unchanged lines between nearby edits so they stay one region', async () => {
+    const before = 'a\nb\nc\nd\ne';
+    const adapter = new FakeVaultAdapter({ 'notes/near.md': before });
+    const app = createApp(adapter);
+
+    const beforeSnap = await captureVaultDiffSnapshot(app);
+    adapter.set('notes/near.md', 'a\nB\nc\nD\ne'); // edits 2 lines apart
+    const afterSnap = await captureVaultDiffSnapshot(app);
+
+    const diff = buildVaultTurnDiff(beforeSnap, afterSnap, 'diff-near');
+    const lines = diff?.files.find(f => f.path === 'notes/near.md')?.diffLines ?? [];
+
+    // The single unchanged line 'c' between the edits is preserved (no gap).
+    expect(lines.some(l => l.type === 'equal' && l.text === 'c')).toBe(true);
+    expect(lines.filter(l => l.type !== 'equal').map(l => l.text)).toEqual(['b', 'B', 'd', 'D']);
+  });
+
   it('skips the whole-vault snapshot when the indexed file count exceeds the cap', async () => {
     const adapter = new FakeVaultAdapter({ 'notes/a.md': 'x' });
     const app = {

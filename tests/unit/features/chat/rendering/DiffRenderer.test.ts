@@ -314,6 +314,46 @@ describe('DiffRenderer', () => {
       expect(hunks[0].oldStart).toBe(2); // Context starts at line 2
       expect(hunks[0].newStart).toBe(2);
     });
+
+    it('should split on a line-number gap even when lines are array-adjacent', () => {
+      // A context-trimmed diff drops the unchanged span between two distant
+      // edits, leaving the surviving context lines adjacent in the array but
+      // discontinuous in line numbers. Each edit must stay its own hunk.
+      const lines: DiffLine[] = [
+        { type: 'equal', text: 'a', oldLineNum: 1, newLineNum: 1 },
+        { type: 'delete', text: 'old', oldLineNum: 2 },
+        { type: 'insert', text: 'new', newLineNum: 2 },
+        { type: 'equal', text: 'b', oldLineNum: 3, newLineNum: 3 },
+        // gap: lines 4..49 were trimmed out
+        { type: 'equal', text: 'y', oldLineNum: 50, newLineNum: 50 },
+        { type: 'delete', text: 'old2', oldLineNum: 51 },
+        { type: 'insert', text: 'new2', newLineNum: 51 },
+        { type: 'equal', text: 'z', oldLineNum: 52, newLineNum: 52 },
+      ];
+
+      const hunks = splitIntoHunks(lines, 3);
+
+      expect(hunks).toHaveLength(2);
+      expect(hunks[0].lines.map(l => l.text)).toEqual(['a', 'old', 'new', 'b']);
+      expect(hunks[1].lines.map(l => l.text)).toEqual(['y', 'old2', 'new2', 'z']);
+      // Starts come from absolute line numbers, not the trimmed array position.
+      expect([hunks[0].oldStart, hunks[0].newStart]).toEqual([1, 1]);
+      expect([hunks[1].oldStart, hunks[1].newStart]).toEqual([50, 50]);
+    });
+
+    it('should not split a large deletion that keeps line numbers contiguous', () => {
+      // Deleting a run advances only old line numbers, with no skipped lines —
+      // that is one hunk, not a gap.
+      const lines: DiffLine[] = [
+        { type: 'equal', text: 'a', oldLineNum: 1, newLineNum: 1 },
+        { type: 'delete', text: 'd1', oldLineNum: 2 },
+        { type: 'delete', text: 'd2', oldLineNum: 3 },
+        { type: 'delete', text: 'd3', oldLineNum: 4 },
+        { type: 'equal', text: 'b', oldLineNum: 5, newLineNum: 2 },
+      ];
+
+      expect(splitIntoHunks(lines, 3)).toHaveLength(1);
+    });
   });
 
   describe('renderDiffContent', () => {
@@ -343,6 +383,26 @@ describe('DiffRenderer', () => {
       );
       expect(separator).toBeDefined();
       expect(separator.textContent).toBe('... 80 more lines');
+    });
+
+    it('should render a separator between hunks split by a line-number gap', () => {
+      const container = createMockEl();
+      const lines: DiffLine[] = [
+        { type: 'equal', text: 'a', oldLineNum: 1, newLineNum: 1 },
+        { type: 'insert', text: 'ins1', newLineNum: 2 },
+        { type: 'equal', text: 'b', oldLineNum: 2, newLineNum: 3 },
+        // gap
+        { type: 'equal', text: 'y', oldLineNum: 40, newLineNum: 41 },
+        { type: 'insert', text: 'ins2', newLineNum: 42 },
+        { type: 'equal', text: 'z', oldLineNum: 41, newLineNum: 43 },
+      ];
+
+      renderDiffContent(container, lines, 3);
+
+      expect(countByClass(container, 'claudian-diff-hunk')).toBe(2);
+      const separators = collectByClass(container, 'claudian-diff-separator');
+      expect(separators).toHaveLength(1);
+      expect(separators[0].textContent).toBe('...');
     });
 
     it('should not cap mixed diff lines (edits with context)', () => {
