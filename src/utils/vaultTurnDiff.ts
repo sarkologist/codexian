@@ -390,47 +390,57 @@ function describeMetadataDiff(mode: VaultTurnDiffFileMode): string {
   }
 }
 
-function buildLineDiff(oldText: string, newText: string, contextLines = 3): DiffLine[] {
-  const oldLines = splitLines(oldText);
-  const newLines = splitLines(newText);
-  let prefixLength = 0;
+// Above this old*new line-count product the LCS table gets too big to build, so
+// the changed region falls back to a single delete-all/insert-all block — the
+// same whole-middle behavior this function had before it learned to localise,
+// so it is no worse for these files. It only bites when a file's edits span more
+// than ~2000 lines on both sides (large notes edited far apart); realistically
+// sized notes stay well under the cap and get properly localised hunks. ~2000x2000
+// keeps the transient Int32Array under ~16MB.
+const LCS_CELL_CAP = 4_000_000;
 
+/**
+ * Builds a line diff that preserves the unchanged lines between separate edits,
+ * then trims each edited region to `contextLines` of surrounding context. The
+ * dropped span between distant edits leaves a line-number gap the renderer uses
+ * to split the file into localised hunks instead of one coarse block.
+ */
+function buildLineDiff(oldText: string, newText: string, contextLines = 3): DiffLine[] {
+  const full = diffLinesFull(splitLines(oldText), splitLines(newText));
+  return trimToContext(full, contextLines);
+}
+
+function diffLinesFull(oldLines: string[], newLines: string[]): DiffLine[] {
+  let prefix = 0;
   while (
-    prefixLength < oldLines.length
-    && prefixLength < newLines.length
-    && oldLines[prefixLength] === newLines[prefixLength]
+    prefix < oldLines.length
+    && prefix < newLines.length
+    && oldLines[prefix] === newLines[prefix]
   ) {
-    prefixLength++;
+    prefix++;
   }
 
-  let suffixLength = 0;
+  let suffix = 0;
   while (
-    suffixLength < oldLines.length - prefixLength
-    && suffixLength < newLines.length - prefixLength
-    && oldLines[oldLines.length - 1 - suffixLength] === newLines[newLines.length - 1 - suffixLength]
+    suffix < oldLines.length - prefix
+    && suffix < newLines.length - prefix
+    && oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
   ) {
-    suffixLength++;
+    suffix++;
   }
 
   const diffLines: DiffLine[] = [];
-  const contextStart = Math.max(0, prefixLength - contextLines);
-
-  for (let i = contextStart; i < prefixLength; i++) {
+  for (let i = 0; i < prefix; i++) {
     diffLines.push({ type: 'equal', text: oldLines[i], oldLineNum: i + 1, newLineNum: i + 1 });
   }
 
-  for (let i = prefixLength; i < oldLines.length - suffixLength; i++) {
-    diffLines.push({ type: 'delete', text: oldLines[i], oldLineNum: i + 1 });
-  }
+  const oldMid = oldLines.slice(prefix, oldLines.length - suffix);
+  const newMid = newLines.slice(prefix, newLines.length - suffix);
+  diffLines.push(...diffMiddle(oldMid, newMid, prefix));
 
-  for (let i = prefixLength; i < newLines.length - suffixLength; i++) {
-    diffLines.push({ type: 'insert', text: newLines[i], newLineNum: i + 1 });
-  }
-
-  const oldSuffixStart = oldLines.length - suffixLength;
-  const newSuffixStart = newLines.length - suffixLength;
-  const suffixContextLength = Math.min(contextLines, suffixLength);
-  for (let i = 0; i < suffixContextLength; i++) {
+  const oldSuffixStart = oldLines.length - suffix;
+  const newSuffixStart = newLines.length - suffix;
+  for (let i = 0; i < suffix; i++) {
     diffLines.push({
       type: 'equal',
       text: oldLines[oldSuffixStart + i],
@@ -440,6 +450,73 @@ function buildLineDiff(oldText: string, newText: string, contextLines = 3): Diff
   }
 
   return diffLines;
+}
+
+// `offset` is the number of common-prefix lines already emitted, so local
+// indices map back to absolute 1-based line numbers.
+function diffMiddle(oldMid: string[], newMid: string[], offset: number): DiffLine[] {
+  if (oldMid.length === 0 && newMid.length === 0) return [];
+
+  const deletions = (): DiffLine[] =>
+    oldMid.map((text, i) => ({ type: 'delete', text, oldLineNum: offset + i + 1 }));
+  const insertions = (): DiffLine[] =>
+    newMid.map((text, i) => ({ type: 'insert', text, newLineNum: offset + i + 1 }));
+
+  if (oldMid.length === 0) return insertions();
+  if (newMid.length === 0) return deletions();
+  if (oldMid.length * newMid.length > LCS_CELL_CAP) return [...deletions(), ...insertions()];
+
+  return lcsDiff(oldMid, newMid, offset);
+}
+
+function lcsDiff(a: string[], b: string[], offset: number): DiffLine[] {
+  const n = a.length;
+  const m = b.length;
+  const width = m + 1;
+  const lengths = new Int32Array((n + 1) * width);
+
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lengths[i * width + j] = a[i] === b[j]
+        ? lengths[(i + 1) * width + (j + 1)] + 1
+        : Math.max(lengths[(i + 1) * width + j], lengths[i * width + (j + 1)]);
+    }
+  }
+
+  const diffLines: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      diffLines.push({ type: 'equal', text: a[i], oldLineNum: offset + i + 1, newLineNum: offset + j + 1 });
+      i++;
+      j++;
+    } else if (lengths[(i + 1) * width + j] >= lengths[i * width + (j + 1)]) {
+      diffLines.push({ type: 'delete', text: a[i], oldLineNum: offset + i + 1 });
+      i++;
+    } else {
+      diffLines.push({ type: 'insert', text: b[j], newLineNum: offset + j + 1 });
+      j++;
+    }
+  }
+  for (; i < n; i++) diffLines.push({ type: 'delete', text: a[i], oldLineNum: offset + i + 1 });
+  for (; j < m; j++) diffLines.push({ type: 'insert', text: b[j], newLineNum: offset + j + 1 });
+
+  return diffLines;
+}
+
+// Keeps every changed line plus up to `contextLines` equal lines adjacent to a
+// change, dropping equal lines farther from any edit. Edits more than
+// 2*contextLines apart end up separated by a line-number gap.
+function trimToContext(diffLines: DiffLine[], contextLines: number): DiffLine[] {
+  const keep = new Array<boolean>(diffLines.length).fill(false);
+  for (let i = 0; i < diffLines.length; i++) {
+    if (diffLines[i].type === 'equal') continue;
+    const from = Math.max(0, i - contextLines);
+    const to = Math.min(diffLines.length - 1, i + contextLines);
+    for (let j = from; j <= to; j++) keep[j] = true;
+  }
+  return diffLines.filter((_, i) => keep[i]);
 }
 
 function splitLines(text: string): string[] {
