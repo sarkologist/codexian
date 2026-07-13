@@ -257,6 +257,166 @@ describe('ChatSelectionController', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('preserves bullet markers when copying an unordered list selection', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const list = document.createElement('ul');
+    const first = document.createElement('li');
+    first.textContent = 'First item';
+    const second = document.createElement('li');
+    second.textContent = 'Second item';
+    list.append(first, second);
+    messageEl.appendChild(list);
+
+    // Dragging across the bullets selects the list contents, so the cloned
+    // fragment is bare <li> elements without their <ul> wrapper.
+    const range = document.createRange();
+    range.selectNodeContents(list);
+    selection = createSelection('First itemSecond item', list, list, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '- First item\n- Second item');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('preserves numbering when copying an ordered list selection', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const list = document.createElement('ol');
+    const first = document.createElement('li');
+    first.textContent = 'First step';
+    const second = document.createElement('li');
+    second.textContent = 'Second step';
+    list.append(first, second);
+    messageEl.appendChild(list);
+
+    const range = document.createRange();
+    range.selectNodeContents(list);
+    selection = createSelection('First stepSecond step', list, list, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '1. First step\n2. Second step');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('continues ordered numbering when the selection starts mid-list', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const list = document.createElement('ol');
+    const items = ['One', 'Two', 'Three'].map(label => {
+      const li = document.createElement('li');
+      li.textContent = label;
+      return li;
+    });
+    list.append(...items);
+    messageEl.appendChild(list);
+
+    const range = document.createRange();
+    range.setStart(items[1].firstChild!, 0);
+    range.setEnd(items[2].firstChild!, items[2].textContent!.length);
+    selection = createSelection('TwoThree', items[1], items[2], [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '2. Two\n3. Three');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('indents nested list items when copying', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const list = document.createElement('ul');
+    const parent = document.createElement('li');
+    parent.appendChild(document.createTextNode('Parent'));
+    const nested = document.createElement('ul');
+    const child = document.createElement('li');
+    child.textContent = 'Child';
+    nested.appendChild(child);
+    parent.appendChild(nested);
+    list.appendChild(parent);
+    messageEl.appendChild(list);
+
+    const range = document.createRange();
+    range.selectNodeContents(list);
+    selection = createSelection('ParentChild', list, list, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '- Parent\n  - Child');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('types the wrapper from the common-ancestor list, not the nested range start', () => {
+    // Outer unordered list whose first item is itself a nested ordered list.
+    // A selection starting inside the nested <ol> must not renumber the outer
+    // items as ordered.
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const outer = document.createElement('ul');
+    const parentItem = document.createElement('li');
+    const nested = document.createElement('ol');
+    const nestedItem = document.createElement('li');
+    nestedItem.textContent = 'Nested';
+    nested.appendChild(nestedItem);
+    parentItem.appendChild(nested);
+    const sibling = document.createElement('li');
+    sibling.textContent = 'Sibling';
+    outer.append(parentItem, sibling);
+    messageEl.appendChild(outer);
+
+    const range = document.createRange();
+    range.setStart(nestedItem.firstChild!, 0);
+    range.setEnd(sibling.firstChild!, sibling.textContent!.length);
+    selection = createSelection('NestedSibling', nestedItem, sibling, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    const copied = setData.mock.calls[0]?.[1] as string | undefined;
+    expect(copied).toContain('1. Nested');
+    expect(copied).toContain('- Sibling');
+    expect(copied).not.toMatch(/^\d+\.\s+Sibling/m);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('emits bullets for loose list items wrapped in paragraphs', () => {
+    const messageEl = messagesEl.querySelector<HTMLElement>('.claudian-message')!;
+    messageEl.textContent = '';
+    const list = document.createElement('ul');
+    const first = document.createElement('li');
+    const firstP = document.createElement('p');
+    firstP.textContent = 'Loose one';
+    first.appendChild(firstP);
+    const second = document.createElement('li');
+    const secondP = document.createElement('p');
+    secondP.textContent = 'Loose two';
+    second.appendChild(secondP);
+    list.append(first, second);
+    messageEl.appendChild(list);
+
+    const range = document.createRange();
+    range.selectNodeContents(list);
+    selection = createSelection('Loose oneLoose two', list, list, [range]);
+
+    controller.start();
+    const { event, setData } = createCopyEvent();
+    document.dispatchEvent(event);
+
+    expect(setData).toHaveBeenCalledWith('text/plain', '- Loose one\n- Loose two');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('does not intercept copy for non-math chat selections', () => {
     selection = createSelection('selected chat text', messageTextNode);
 
