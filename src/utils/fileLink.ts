@@ -6,6 +6,7 @@
  */
 
 import type { App, Component } from 'obsidian';
+import { Keymap } from 'obsidian';
 
 import { getVaultFileByPath, openVaultFileAtLine, openVaultFileAtRange } from './obsidianCompat';
 
@@ -199,6 +200,24 @@ function normalizeLineSuffixLink(app: App, link: HTMLAnchorElement): void {
   if (!(link.textContent || '').trim()) link.textContent = target;
 }
 
+const MIDDLE_MOUSE_BUTTON = 1;
+
+/**
+ * Delegates an activation to `handler` on click, and on middle-click via
+ * `auxclick` (Chromium never reports button 1 as a `click`). Other auxiliary
+ * buttons are left alone so right-click still opens the context menu.
+ */
+function registerActivation(
+  container: HTMLElement,
+  component: Component,
+  handler: (event: MouseEvent) => void
+): void {
+  component.registerDomEvent(container, 'click', handler);
+  component.registerDomEvent(container, 'auxclick', (event: MouseEvent) => {
+    if (event.button === MIDDLE_MOUSE_BUTTON) handler(event);
+  });
+}
+
 /**
  * Registers a delegated click handler for file links on a container.
  * Should be called once on the messages container.
@@ -209,7 +228,7 @@ export function registerFileLinkHandler(
   container: HTMLElement,
   component: Component
 ): void {
-  component.registerDomEvent(container, 'click', (event: MouseEvent) => {
+  registerActivation(container, component, (event: MouseEvent) => {
     const target = event.target as HTMLElement;
     // Handle both our links and Obsidian's internal links
     const link = target.closest('.claudian-file-link, .internal-link') as HTMLAnchorElement;
@@ -218,6 +237,10 @@ export function registerFileLinkHandler(
     event.preventDefault();
     const rawTarget = link.dataset.href || link.getAttribute('href');
     if (!rawTarget) return;
+
+    // Same pane rules as a link in a note: reuse the current tab, and let
+    // Cmd/Ctrl (+Alt, +Shift) or a middle-click open a new tab, split, or window.
+    const newLeaf = Keymap.isModEvent(event);
 
     // Prefer explicit line metadata; otherwise derive it from a trailing
     // :line[-end] on the target. Obsidian-rendered internal links keep the
@@ -234,14 +257,14 @@ export function registerFileLinkHandler(
     // handle the raw target (e.g. open/create an unresolved note) as before.
     if (line !== undefined && Number.isFinite(line) && fileExistsInVault(app, path)) {
       if (endLine !== undefined && Number.isFinite(endLine)) {
-        void openVaultFileAtRange(app, path, line, endLine);
+        void openVaultFileAtRange(app, path, line, endLine, newLeaf);
       } else {
-        void openVaultFileAtLine(app, path, line);
+        void openVaultFileAtLine(app, path, line, newLeaf);
       }
       return;
     }
 
-    void app.workspace.openLinkText(rawTarget, '', 'tab');
+    void app.workspace.openLinkText(rawTarget, '', newLeaf);
   });
 }
 
@@ -255,7 +278,7 @@ export function registerDiffLineHandler(
   container: HTMLElement,
   component: Component
 ): void {
-  component.registerDomEvent(container, 'click', (event: MouseEvent) => {
+  registerActivation(container, component, (event: MouseEvent) => {
     const target = event.target as HTMLElement;
     const lineEl = target.closest('.claudian-diff-line-clickable') as HTMLElement | null;
     if (!lineEl) return;
@@ -269,7 +292,7 @@ export function registerDiffLineHandler(
     if (!filePath || !Number.isFinite(line)) return;
 
     event.preventDefault();
-    void openVaultFileAtLine(app, filePath, line);
+    void openVaultFileAtLine(app, filePath, line, Keymap.isModEvent(event));
   });
 }
 
