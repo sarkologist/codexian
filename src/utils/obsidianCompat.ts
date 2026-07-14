@@ -1,5 +1,12 @@
-import type { App, TFile, Workspace, WorkspaceLeaf } from 'obsidian';
+import type { App, PaneType, TFile, Workspace, WorkspaceLeaf } from 'obsidian';
 import { MarkdownView } from 'obsidian';
+
+/**
+ * Where a link should open, following Obsidian's own semantics: `false` reuses
+ * the current tab, a `PaneType` opens a new tab/split/window. `Keymap.isModEvent`
+ * maps a click to one of these.
+ */
+export type LinkPaneType = PaneType | boolean;
 
 export function getVaultFileByPath(app: App, filePath: string): TFile | null {
   const file = app.vault.getAbstractFileByPath(filePath);
@@ -33,18 +40,23 @@ export async function revealWorkspaceLeaf(workspace: Workspace, leaf: WorkspaceL
 }
 
 /**
- * Opens a vault file in a tab and scrolls to a 1-based line.
+ * Opens a vault file and scrolls to a 1-based line.
  * `eState.line` is 0-based; MarkdownView honors it to scroll to the line.
  * No-op when the file is missing (e.g. it was deleted).
  */
-export async function openVaultFileAtLine(app: App, filePath: string, line: number): Promise<void> {
+export async function openVaultFileAtLine(
+  app: App,
+  filePath: string,
+  line: number,
+  newLeaf: LinkPaneType = false,
+): Promise<void> {
   const file = resolveVaultFile(app, filePath);
   if (!file) return;
-  await app.workspace.openLinkText(file.path, '', 'tab', { eState: { line: Math.max(0, line - 1) } });
+  await app.workspace.openLinkText(file.path, '', newLeaf, { eState: { line: Math.max(0, line - 1) } });
 }
 
 /**
- * Opens a vault file in a tab and selects an inclusive 1-based line range.
+ * Opens a vault file and selects an inclusive 1-based line range.
  * Scrolls to the first line via `eState`, then selects through the last line
  * once an editor is available. Falls back to scroll-only in reading view.
  */
@@ -53,13 +65,14 @@ export async function openVaultFileAtRange(
   filePath: string,
   startLine: number,
   endLine: number,
+  newLeaf: LinkPaneType = false,
 ): Promise<void> {
   const file = resolveVaultFile(app, filePath);
   if (!file) return;
 
   const firstLine = Math.min(startLine, endLine);
   const lastLine = Math.max(startLine, endLine);
-  await app.workspace.openLinkText(file.path, '', 'tab', { eState: { line: Math.max(0, firstLine - 1) } });
+  await app.workspace.openLinkText(file.path, '', newLeaf, { eState: { line: Math.max(0, firstLine - 1) } });
 
   const view = app.workspace.getActiveViewOfType?.(MarkdownView);
   if (!view || view.getMode?.() === 'preview' || !view.editor) return;

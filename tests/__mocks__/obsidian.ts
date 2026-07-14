@@ -97,6 +97,21 @@ export const Platform = {
   isMacOS: true,
 };
 
+type ModEvent = Partial<Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'button'>>;
+
+export class Keymap {
+  // Mirrors Obsidian: Cmd/Ctrl (or middle-click) opens a tab, +Alt splits,
+  // +Alt+Shift pops out a window, and a plain click reuses the current tab.
+  static isModEvent(evt?: ModEvent | null): 'tab' | 'split' | 'window' | boolean {
+    if (!evt) return false;
+
+    const mod = Platform.isMacOS ? evt.metaKey === true : evt.ctrlKey === true;
+    if (!mod) return evt.button === 1 ? 'tab' : false;
+    if (!evt.altKey) return 'tab';
+    return evt.shiftKey === true ? 'window' : 'split';
+  }
+}
+
 export class App {
   vault: any = {
     adapter: {
