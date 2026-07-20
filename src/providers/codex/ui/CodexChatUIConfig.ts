@@ -26,6 +26,8 @@ const EFFORT_LEVELS: ProviderReasoningOption[] = [
 const CODEX_PERMISSION_MODE_TOGGLE: ProviderPermissionModeToggleConfig = {
   inactiveValue: 'normal',
   inactiveLabel: 'Safe',
+  intermediateValue: 'auto',
+  intermediateLabel: 'Auto',
   activeValue: 'yolo',
   activeLabel: 'YOLO',
   planValue: 'plan',

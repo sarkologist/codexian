@@ -82,6 +82,12 @@ function resolveCodexSandboxConfig(
   if (permissionMode === 'yolo') {
     return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
   }
+  // auto — never interrupt, but keep the sandbox as the guardrail. The safe-mode
+  // floor is deliberately ignored: a read-only floor would leave auto unable to
+  // act and unable to ask, so it pins workspace-write instead.
+  if (permissionMode === 'auto') {
+    return { approvalPolicy: 'never', sandbox: 'workspace-write' };
+  }
   if (permissionMode === 'plan') {
     return { approvalPolicy: 'on-request', sandbox: 'workspace-write' };
   }

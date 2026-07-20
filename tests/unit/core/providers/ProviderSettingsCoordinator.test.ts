@@ -375,7 +375,35 @@ describe('ProviderSettingsCoordinator', () => {
       expect(settings.serviceTier).toBe('fast');
     });
 
-    it('does not leak the Claude auto permission mode into a provider that lacks it', () => {
+    // OpenCode has no auto step in its toggle, so it is the guard against auto
+    // leaking in from a provider that does (Claude, Codex).
+    it('does not leak the auto permission mode into a provider that lacks it', () => {
+      const settings: Record<string, unknown> = {
+        settingsProvider: 'claude',
+        permissionMode: 'auto',
+        providerConfigs: {
+          opencode: {
+            enabled: true,
+          },
+        },
+        model: 'haiku',
+        effortLevel: 'high',
+        serviceTier: 'default',
+        thinkingBudget: 'off',
+        savedProviderModel: {},
+        savedProviderEffort: {},
+        savedProviderServiceTier: {},
+        savedProviderThinkingBudget: {},
+        savedProviderPermissionMode: {},
+      };
+
+      ProviderSettingsCoordinator.projectProviderState(settings, 'opencode');
+
+      expect(settings.permissionMode).not.toBe('auto');
+      expect(settings.permissionMode).toBe('normal');
+    });
+
+    it('projects the auto permission mode into Codex now that its toggle supports it', () => {
       const settings: Record<string, unknown> = {
         settingsProvider: 'claude',
         permissionMode: 'auto',
@@ -398,8 +426,7 @@ describe('ProviderSettingsCoordinator', () => {
 
       ProviderSettingsCoordinator.projectProviderState(settings, 'codex');
 
-      expect(settings.permissionMode).not.toBe('auto');
-      expect(settings.permissionMode).toBe('normal');
+      expect(settings.permissionMode).toBe('auto');
     });
 
     it('preserves the Claude auto permission mode when projecting saved provider state', () => {

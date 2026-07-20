@@ -313,8 +313,8 @@ export class ProviderSettingsCoordinator {
     );
 
     // Fall back to the provider's safe inactive value when nothing else resolves
-    // so a mode that another provider owns (e.g. Claude's auto) never leaks into a
-    // provider whose toggle does not support it.
+    // so a mode only some providers expose (e.g. auto, which Claude and Codex have
+    // but OpenCode does not) never leaks into a toggle that cannot represent it.
     const projectedPermissionMode = savedPermissionModeValue
       ?? derivedPermissionMode
       ?? (shouldPreferCurrentProjection ? currentPermissionMode : undefined)

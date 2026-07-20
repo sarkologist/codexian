@@ -1440,6 +1440,35 @@ describe('CodexChatRuntime', () => {
       rt.cleanup();
     });
 
+    it('uses workspace-write with never for auto mode', async () => {
+      const plugin = createMockPlugin({ permissionMode: 'auto' });
+      const autoRuntime = new CodexChatRuntime(plugin);
+
+      await collectChunks(autoRuntime.query(createTurn()));
+
+      const threadStartCall = findCall('thread/start');
+      expect(threadStartCall[1].sandbox).toBe('workspace-write');
+      expect(threadStartCall[1].approvalPolicy).toBe('never');
+
+      autoRuntime.cleanup();
+    });
+
+    it('keeps auto mode writable even when the safe-mode floor is read-only', async () => {
+      const plugin = createMockPlugin({
+        permissionMode: 'auto',
+        providerConfigs: { codex: { safeMode: 'read-only' } },
+      });
+      const autoRuntime = new CodexChatRuntime(plugin);
+
+      await collectChunks(autoRuntime.query(createTurn()));
+
+      const threadStartCall = findCall('thread/start');
+      expect(threadStartCall[1].sandbox).toBe('workspace-write');
+      expect(threadStartCall[1].approvalPolicy).toBe('never');
+
+      autoRuntime.cleanup();
+    });
+
     it('uses workspace-write with on-request for normal mode', async () => {
       const plugin = createMockPlugin({ permissionMode: 'normal' });
       const safeRuntime = new CodexChatRuntime(plugin);
