@@ -224,11 +224,13 @@ describe('CodexChatUIConfig', () => {
   });
 
   describe('getPermissionModeToggle', () => {
-    it('should return yolo/safe toggle config with plan mode', () => {
+    it('should return safe/auto/yolo toggle config with plan mode', () => {
       const toggle = codexChatUIConfig.getPermissionModeToggle!();
       expect(toggle).toEqual({
         inactiveValue: 'normal',
         inactiveLabel: 'Safe',
+        intermediateValue: 'auto',
+        intermediateLabel: 'Auto',
         activeValue: 'yolo',
         activeLabel: 'YOLO',
         planValue: 'plan',
